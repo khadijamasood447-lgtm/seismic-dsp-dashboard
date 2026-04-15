@@ -1,29 +1,19 @@
-const fs = require("fs")
-const path = require("path")
+﻿// scripts/copy-web-ifc-wasm.cjs
+const fs = require('fs');
+const path = require('path');
 
-function copyIfExists(from, to) {
-  if (!fs.existsSync(from)) return false
-  fs.copyFileSync(from, to)
-  return true
-}
+console.log('📦 Copying web-ifc WASM files...');
 
-function main() {
-  const root = path.join(__dirname, "..")
-  const destDir = path.join(root, "public", "wasm")
-  fs.mkdirSync(destDir, { recursive: true })
-
-  const candidates = [
-    path.join(root, "node_modules", "web-ifc", "web-ifc.wasm"),
-    path.join(root, "node_modules", "web-ifc", "web-ifc-mt.wasm"),
-    path.join(root, "node_modules", "web-ifc", "web-ifc-api.wasm"),
-  ]
-
-  for (const src of candidates) {
-    const base = path.basename(src)
-    const dst = path.join(destDir, base)
-    copyIfExists(src, dst)
+try {
+  const source = require.resolve('web-ifc/web-ifc.wasm');
+  const dest = path.join(process.cwd(), 'public', 'web-ifc.wasm');
+  
+  if (!fs.existsSync(path.dirname(dest))) {
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
   }
+  
+  fs.copyFileSync(source, dest);
+  console.log('✅ web-ifc.wasm copied successfully');
+} catch (error) {
+  console.warn('⚠️ Could not copy web-ifc.wasm:', error.message);
 }
-
-main()
-

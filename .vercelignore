@@ -1,0 +1,17 @@
+.git/
+.next/
+node_modules/
+
+ISLAMABD DATA/
+data/training/
+pdf_extracted/
+public/videos/
+public/liquefaction/
+
+**/*.tif
+**/*.tiff
+**/*.aux.xml
+**/*.zip
+
+logs/
+

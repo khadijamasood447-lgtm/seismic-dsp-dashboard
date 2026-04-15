@@ -282,13 +282,17 @@ export default function ChatbotWidget() {
       }
       if (!ct.includes("text/event-stream")) {
         const json = await res.json().catch(() => null)
-        const text = String(json?.response ?? json?.text ?? "").trim()
+        let text = String(json?.response ?? json?.text ?? "").trim()
         const suggested = Array.isArray(json?.suggested_actions) ? json.suggested_actions : []
         const citations = Array.isArray(json?.citations) ? json.citations : []
         const dataQuoted = json?.data_quoted ?? null
         const complianceResult = json?.compliance_result ?? null
         const status = json?.status ? String(json.status) : ""
         const errorCode = json?.error_code ? String(json.error_code) : null
+        if (status === "degraded") {
+          const prefix = "⚠️ AI service unavailable — using local responses."
+          if (!text.startsWith(prefix)) text = `${prefix}\n\n${text}`
+        }
         setMessages((m) =>
           m.map((x) =>
             x.id === assistantId ? { ...x, text, suggestedActions: suggested, citations, dataQuoted, complianceResult, status, errorCode } : x,

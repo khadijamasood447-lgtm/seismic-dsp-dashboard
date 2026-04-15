@@ -5,11 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "prebuild": "node scripts/validate-env.js",
+    "prebuild": "node scripts/validate-env.cjs",
     "build": "next build",
-    "start": "next start -p $PORT",
-    "railway-start": "next start -p $PORT",
-    "postinstall": "node scripts/copy-web-ifc-wasm.js",
+    "start": "next start",
+    "postinstall": "node scripts/copy-web-ifc-wasm.cjs",
     "lint": "next lint"
   },
   "dependencies": {
@@ -54,7 +53,7 @@
     "lucide-react": "^0.553.0",
     "math-intrinsics": "^1.1.0",
     "mime-types": "^2.1.35",
-    "next": "14.2.35",
+    "next": "14.2.33",
     "ol": "^10.7.0",
     "pdf-lib": "^1.17.1",
     "pdfkit": "^0.17.2",
@@ -75,7 +74,7 @@
     "@types/react-dom": "^18.0.0",
     "autoprefixer": "^10.4.22",
     "eslint": "^8.57.1",
-    "eslint-config-next": "14.2.35",
+    "eslint-config-next": "14.2.33",
     "nodemon": "^3.1.11",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.18",

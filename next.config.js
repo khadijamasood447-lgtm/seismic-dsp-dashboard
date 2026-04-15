@@ -1,15 +1,25 @@
 ﻿/** @type {import('next').NextConfig} */
 const nextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,  // Temporarily ignore TS errors to deploy
-  },
-  eslint: {
-    ignoreDuringBuilds: true, // Ignore linting errors
+  output: 'standalone',
+  images: {
+    unoptimized: true,
   },
   experimental: {
-    serverComponentsExternalPackages: ['pg'],
+    serverComponentsExternalPackages: ['pdfkit', 'pg', 'googleapis'],
   },
-  staticPageGenerationTimeout: 120,
-}
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        fs: false,
+        net: false,
+        tls: false,
+        dns: false,
+        pg: false,
+        'pg-native': false,
+      };
+    }
+    return config;
+  },
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

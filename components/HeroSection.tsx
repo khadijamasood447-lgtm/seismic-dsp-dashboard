@@ -550,15 +550,11 @@ export function HeroSection({ onNavigate, onSelectRole }: HeroSectionProps) {
         } ${showNavbar ? 'pt-16' : ''}`}
       >
         <div className="absolute inset-0 w-full h-full z-0">
-          <video
+          <img
             className="absolute inset-0 h-full w-full object-cover"
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            poster="/videos/skylineformission.png"
-          ><img src="/videos/1.jfif" alt="Seismic dashboard image" />
+            src="/videos/skylineformission.png"
+            alt="Seismic dashboard image"
+          />
         </div>
         
         <div className="absolute inset-0 bg-gradient-to-r from-[#0a0f1c]/60 to-transparent z-10 pointer-events-none"></div>

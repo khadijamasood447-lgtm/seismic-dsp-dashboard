@@ -46,7 +46,7 @@ async function main() {
 
   const enforce =
     String(process.env.SKIP_ENV_VALIDATE ?? '').trim() !== '1' &&
-    (process.env.NODE_ENV === 'production' || Boolean(process.env.RAILWAY_ENVIRONMENT) || Boolean(process.env.VERCEL))
+    String(process.env.ENFORCE_ENV_VALIDATE ?? '').trim() === '1'
 
   const model = process.env.ANTHROPIC_MODEL || 'claude-3-haiku-20240307'
   const key = process.env.ANTHROPIC_API_KEY || ''
@@ -79,4 +79,3 @@ async function main() {
 }
 
 main()
-

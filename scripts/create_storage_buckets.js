@@ -1,6 +1,7 @@
-require('dotenv').config({ path: '.env.local' })
+import dotenv from 'dotenv'
+import { createClient } from '@supabase/supabase-js'
 
-const { createClient } = require('@supabase/supabase-js')
+dotenv.config({ path: '.env.local' })
 
 function looksReal(v) {
   if (!v) return false
@@ -47,4 +48,3 @@ main().catch((e) => {
   console.error('Unexpected error:', e)
   process.exit(1)
 })
-

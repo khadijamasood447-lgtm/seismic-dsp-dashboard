@@ -8,7 +8,7 @@ This file is a lightweight, human-readable place to keep key decisions and curre
 - GIS: Islamabad Zone-1 rasters are standardized onto one grid (DEM reference) and clipped to AOI. Outputs live in `data/gis/islamabad_zone1/standardized/` with `_metadata.json`.
 - App: Next.js dashboard includes chat (/api/chat), IFC screening (/api/analyze-ifc), PDF report generation (/api/generate-report), and e-permit workflow routes/pages.
 - IFC visualization (Phase 1): Chat can upload .ifc via `/api/visualize-ifc` (Supabase Storage signed URL). The existing 3D page renders IFC client-side using Three.js `IFCLoader` with `web-ifc` wasm served from `public/wasm/`.
-- Deployment: Large datasets/assets are excluded via `.railwayignore` and `.gitignore` (e.g., `ISLAMABD DATA/`, `public/videos/`, `pdf_extracted/`, `data/training/`).
+- Deployment: Railway config removed; Vercel config added (`vercel.json`). Large datasets/assets are excluded via `.gitignore` and `.vercelignore` (e.g., `ISLAMABD DATA/`, `pdf_extracted/`, `data/training/`, and large video files under `public/videos/*.mp4`).
 
 ## Islamabad model training
 
