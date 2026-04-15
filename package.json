@@ -8,7 +8,7 @@
     
     "build": "next build",
     "start": "next start",
-    "postinstall": "node scripts/copy-web-ifc-wasm.cjs",
+    
     "lint": "next lint"
   },
   "dependencies": {
