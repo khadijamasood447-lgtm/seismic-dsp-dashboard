@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Compliance Report Template</title>
+    <style>
+      body { font-family: Arial, sans-serif; color: #1f2937; margin: 24px; }
+      h1, h2, h3 { margin: 0 0 8px 0; }
+      .section { border: 1px solid #d1d5db; padding: 10px; margin-bottom: 12px; border-radius: 6px; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border: 1px solid #d1d5db; padding: 6px; font-size: 12px; }
+      .pass { color: #15803d; }
+      .warning { color: #b45309; }
+      .fail { color: #b91c1c; }
+      .small { font-size: 11px; color: #4b5563; }
+    </style>
+  </head>
+  <body>
+    <h1>Geotechnical & Structural Assessment</h1>
+    <p class="small">Islamabad Zone 1 - Preliminary Compliance Report</p>
+    <div class="section">
+      <h2>Site Conditions</h2>
+      <p>Vs at 1 m, Vs at 5 m, Site Class, PGA, and soil composition.</p>
+    </div>
+    <div class="section">
+      <h2>Compliance Summary</h2>
+      <table>
+        <thead>
+          <tr><th>Category</th><th>Status</th><th>Severity</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Height</td><td class="pass">Pass</td><td>-</td></tr>
+          <tr><td>Foundation</td><td class="warning">Warning</td><td>Medium</td></tr>
+          <tr><td>Seismic</td><td class="fail">Fail</td><td>High</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="section">
+      <h2>Limitations</h2>
+      <p class="small">Preliminary AI-assisted screening only; not a substitute for licensed engineering review and site-specific testing.</p>
+    </div>
+  </body>
+  </html>
+

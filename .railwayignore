@@ -1,0 +1,33 @@
+.next
+node_modules
+.git
+.vercel
+.env.local
+.env.production
+conversation_logs
+
+ISLAMABD DATA/**
+cyclic triaxial/**
+data/training/**
+
+**/*.zip
+**/*.tif
+**/*.tiff
+**/*.joblib
+**/*.aux.xml
+**/*.gds
+**/*.dat
+**/*.xlsx
+
+public/videos/broaderview.mp4
+public/videos/GEONEXUSBACKGROUND.mp4
+public/videos/**
+public/**/*.mp4
+public/**/*.mov
+public/**/*.webm
+public/**/*.mkv
+public/**/*.avi
+public/**/*.mpg
+public/**/*.mpeg
+public/islamabad_grid_bundle.json
+public/liquefaction/**

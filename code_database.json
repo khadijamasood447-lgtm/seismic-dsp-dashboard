@@ -1,0 +1,35 @@
+{
+  "version": "0.1.0",
+  "updated_at": "2026-04-13T00:00:00.000Z",
+  "docs": [
+    {
+      "id": "bcp-sp-2021",
+      "title": "Pakistan Building Code (BCP-SP 2021) (Placeholder Index)",
+      "file": "ISLAMABD DATA/buildingcodes.pdf"
+    }
+  ],
+  "entries": [
+    {
+      "id": "site-class-vs30",
+      "title": "Site Classification by Vs30 (Table 6-1)",
+      "tags": ["site-class", "vs30", "table-6-1"],
+      "text": "Site class is based on Vs30 (time-averaged shear-wave velocity in the upper 30 m). Use this table to classify Site Class A-F. For this dashboard, the classification is a proxy and should be confirmed by site-specific investigation.",
+      "refs": [{ "doc": "bcp-sp-2021", "section": "Soil / Site Classification", "table": "6-1" }]
+    },
+    {
+      "id": "limitations",
+      "title": "Model Limitations and Use Constraints",
+      "tags": ["limitations", "disclaimer"],
+      "text": "Predictions are research-grade and intended for screening-level assessment only. Shallow depths (1-5 m) do not replace standard Vs30 measurement. Uncertainty intervals reflect model and data limitations and may not capture all site-specific variability. Always verify with site investigation and a licensed engineer before design or construction.",
+      "refs": [{ "doc": "bcp-sp-2021", "section": "General", "clause": "N/A" }]
+    },
+    {
+      "id": "foundation-general",
+      "title": "Foundation Requirements (General)",
+      "tags": ["foundation", "requirements"],
+      "text": "Foundation selection should consider site class, groundwater conditions, and settlement/liquefaction potential. For softer sites, consider ground improvement and/or deep foundations subject to geotechnical design. This entry is a placeholder until PDF extraction is completed.",
+      "refs": [{ "doc": "bcp-sp-2021", "section": "Foundations", "clause": "N/A" }]
+    }
+  ]
+}
+

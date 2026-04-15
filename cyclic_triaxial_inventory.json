@@ -1,0 +1,316 @@
+{
+  "folder": "cyclic triaxial",
+  "file_count": 57,
+  "extension_counts": {
+    ".zip": 19,
+    ".dat": 9,
+    ".gds": 9,
+    ".xlsx": 13,
+    ".m": 1,
+    ".csv": 6
+  },
+  "dat": {
+    "files": 9,
+    "points": 45800
+  },
+  "gds": {
+    "files": 9,
+    "points": 223489
+  },
+  "csv": {
+    "files": 6
+  },
+  "xlsx": {
+    "files": 13
+  },
+  "zip": {
+    "files": 19,
+    "member_files_total": 2228,
+    "member_extension_counts": {
+      ".xlsx": 616,
+      ".dat": 153,
+      ".json": 6,
+      ".txt": 48,
+      ".pdf": 21,
+      ".m": 5,
+      ".csv": 1377,
+      ".docx": 2
+    },
+    "duplicate_member_files": 10,
+    "dat_members": 153,
+    "dat_prefix_counts": {
+      "ISO": 6,
+      "OEC": 4,
+      "TCUA": 38,
+      "TCUE": 37,
+      "TCUI": 44,
+      "TMCD": 7,
+      "TMCU": 10
+    },
+    "breakdown": [
+      {
+        "zip": "15546611.zip",
+        "members": 3,
+        "exts": {
+          ".xlsx": 3
+        }
+      },
+      {
+        "zip": "16699865.zip",
+        "members": 3,
+        "exts": {
+          ".xlsx": 3
+        }
+      },
+      {
+        "zip": "ISO-all.zip",
+        "members": 6,
+        "exts": {
+          ".dat": 6
+        }
+      },
+      {
+        "zip": "OEC-all.zip",
+        "members": 4,
+        "exts": {
+          ".dat": 4
+        }
+      },
+      {
+        "zip": "PRJ-2557.zip",
+        "members": 86,
+        "exts": {
+          ".json": 1,
+          ".txt": 41,
+          ".pdf": 13,
+          ".m": 3,
+          ".csv": 28
+        }
+      },
+      {
+        "zip": "PRJ-3201.zip",
+        "members": 422,
+        "exts": {
+          ".json": 1,
+          ".txt": 1,
+          ".xlsx": 420
+        }
+      },
+      {
+        "zip": "PRJ-3809.zip",
+        "members": 1229,
+        "exts": {
+          ".json": 1,
+          ".txt": 5,
+          ".csv": 1223
+        }
+      },
+      {
+        "zip": "PRJ-4583.zip",
+        "members": 140,
+        "exts": {
+          ".json": 1,
+          ".pdf": 2,
+          ".xlsx": 137
+        }
+      },
+      {
+        "zip": "PRJ-4666.zip",
+        "members": 131,
+        "exts": {
+          ".json": 1,
+          ".pdf": 6,
+          ".csv": 122,
+          ".m": 2
+        }
+      },
+      {
+        "zip": "PRJ-5800.zip",
+        "members": 7,
+        "exts": {
+          ".json": 1,
+          ".csv": 4,
+          ".docx": 2
+        }
+      },
+      {
+        "zip": "TCUA-all.zip",
+        "members": 38,
+        "exts": {
+          ".dat": 38
+        }
+      },
+      {
+        "zip": "TCUE1-14.zip",
+        "members": 28,
+        "exts": {
+          ".dat": 28
+        }
+      },
+      {
+        "zip": "TCUE15-23.zip",
+        "members": 9,
+        "exts": {
+          ".dat": 9
+        }
+      },
+      {
+        "zip": "TCUI-all.zip",
+        "members": 44,
+        "exts": {
+          ".dat": 44
+        }
+      },
+      {
+        "zip": "TMCD-all (1).zip",
+        "members": 7,
+        "exts": {
+          ".dat": 7
+        }
+      },
+      {
+        "zip": "TMCD-all.zip",
+        "members": 7,
+        "exts": {
+          ".dat": 7
+        }
+      },
+      {
+        "zip": "TMCU1-4.zip",
+        "members": 8,
+        "exts": {
+          ".dat": 8
+        }
+      },
+      {
+        "zip": "TMCU5-6.zip",
+        "members": 2,
+        "exts": {
+          ".dat": 2
+        }
+      },
+      {
+        "zip": "Data.zip",
+        "members": 54,
+        "exts": {
+          ".xlsx": 53,
+          ".txt": 1
+        }
+      }
+    ],
+    "sample_headers": [
+      {
+        "zip": "ISO-all.zip",
+        "member": "ISO1.dat",
+        "lines": [
+          "p        epsv   Void ratio",
+          "[kPa]    [%]    [-]",
+          "48.886\t0.00000\t0.97416",
+          "56.553\t0.02413\t0.97369",
+          "65.174\t0.06058\t0.97297",
+          "73.872\t0.10090\t0.97217",
+          "82.486\t0.14629\t0.97127",
+          "91.246\t0.19286\t0.97036"
+        ]
+      },
+      {
+        "zip": "ISO-all.zip",
+        "member": "ISO2.dat",
+        "lines": [
+          "p        epsv   Void ratio",
+          "[kPa]    [%]    [-]",
+          "49.577\t0.00000\t0.82312",
+          "57.237\t0.02076\t0.82274",
+          "65.935\t0.04970\t0.82221",
+          "74.656\t0.07929\t0.82167",
+          "83.354\t0.10888\t0.82113",
+          "92.008\t0.13814\t0.82060"
+        ]
+      },
+      {
+        "zip": "ISO-all.zip",
+        "member": "ISO3.dat",
+        "lines": [
+          "p        epsv   Void ratio",
+          "[kPa]    [%]    [-]",
+          "49.077\t0.00000\t0.68990",
+          "57.981\t0.01695\t0.68961",
+          "67.984\t0.04246\t0.68918",
+          "76.705\t0.06583\t0.68879",
+          "85.381\t0.08871\t0.68840",
+          "94.203\t0.11109\t0.68802"
+        ]
+      },
+      {
+        "zip": "ISO-all.zip",
+        "member": "ISO4.dat",
+        "lines": [
+          "p        epsv   Void ratio",
+          "[kPa]    [%]    [-]",
+          "49.070\t0.00000\t0.96307",
+          "55.187\t0.01736\t0.96273",
+          "63.349\t0.05108\t0.96207",
+          "71.403\t0.09415\t0.96122",
+          "79.481\t0.13922\t0.96034",
+          "87.620\t0.18497\t0.95944"
+        ]
+      },
+      {
+        "zip": "ISO-all.zip",
+        "member": "ISO5.dat",
+        "lines": [
+          "p        epsv   Void ratio",
+          "[kPa]    [%]    [-]",
+          "48.980\t0.00000\t0.82403",
+          "56.058\t0.01645\t0.82373",
+          "64.175\t0.04249\t0.82326",
+          "72.336\t0.07045\t0.82275",
+          "80.475\t0.09793\t0.82225",
+          "88.614\t0.12540\t0.82175"
+        ]
+      },
+      {
+        "zip": "ISO-all.zip",
+        "member": "ISO6.dat",
+        "lines": [
+          "p        epsv   Void ratio",
+          "[kPa]    [%]    [-]",
+          "49.953\t0.00000\t0.68021",
+          "56.303\t0.01242\t0.68000",
+          "64.442\t0.03169\t0.67968",
+          "72.559\t0.05227\t0.67933",
+          "80.782\t0.07204\t0.67900",
+          "88.859\t0.09099\t0.67868"
+        ]
+      },
+      {
+        "zip": "OEC-all.zip",
+        "member": "OEC1.dat",
+        "lines": [
+          "sigma1   eps1   Void ratio",
+          "[kPa]    [%]    [-]",
+          "0.000\t0.000\t0.99757",
+          "0.111\t0.067\t0.99623",
+          "0.221\t0.104\t0.99550",
+          "0.445\t0.251\t0.99256",
+          "0.722\t0.377\t0.99003",
+          "0.998\t0.491\t0.98776"
+        ]
+      },
+      {
+        "zip": "OEC-all.zip",
+        "member": "OEC2.dat",
+        "lines": [
+          "sigma1   eps1   Void ratio",
+          "[kPa]    [%]    [-]",
+          "0.000\t0.000\t0.88977",
+          "0.111\t0.010\t0.88958",
+          "0.221\t0.020\t0.88939",
+          "0.445\t0.047\t0.88888",
+          "0.722\t0.100\t0.88787",
+          "0.998\t0.147\t0.88699"
+        ]
+      }
+    ]
+  }
+}
