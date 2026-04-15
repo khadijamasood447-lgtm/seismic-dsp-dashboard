@@ -558,9 +558,7 @@ export function HeroSection({ onNavigate, onSelectRole }: HeroSectionProps) {
             playsInline
             preload="metadata"
             poster="/videos/skylineformission.png"
-          >
-            <source src="/videos/HEROSECTION.mp4" type="video/mp4" />
-          </video>
+          ><img src="/videos/1.jfif" alt="Seismic dashboard image" />
         </div>
         
         <div className="absolute inset-0 bg-gradient-to-r from-[#0a0f1c]/60 to-transparent z-10 pointer-events-none"></div>

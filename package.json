@@ -2,11 +2,12 @@
   "name": "seismic-dsp-dashboard",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "prebuild": "node scripts/validate-env.js",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p $PORT"
     "railway-start": "next start -p $PORT",
     "postinstall": "node scripts/copy-web-ifc-wasm.js",
     "lint": "next lint"
