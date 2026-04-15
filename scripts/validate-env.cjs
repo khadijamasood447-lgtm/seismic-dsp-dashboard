@@ -1,1 +1,2 @@
-﻿console.log("✅ Environment validation passed (bypass mode)");
+﻿// No validation - Supabase only
+console.log("✓ Build continuing");
