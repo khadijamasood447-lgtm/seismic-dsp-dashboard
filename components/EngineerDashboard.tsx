@@ -79,7 +79,7 @@ export function EngineerDashboard() {
       case 'under_review':
         return 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30';
       default:
-        return 'bg-slate-500/10 text-slate-500 border-slate-500/30';
+        return 'bg-gray-500/10 text-gray-500 border-gray-500/30';
     }
   };
 
@@ -104,7 +104,7 @@ export function EngineerDashboard() {
 
               {/* Upload Zone */}
               <div className="border-2 border-dashed border-border rounded-lg p-8 sm:p-12 text-center hover:border-primary transition-colors cursor-pointer bg-background/20">
-                <FileText className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-foreground mb-2">Drop IFC files here or click to browse</p>
                 <p className="text-sm text-muted-foreground mb-4">Supports .ifc, .dwg, .pdf (Max 500MB)</p>
                 <Button 
@@ -159,18 +159,18 @@ export function EngineerDashboard() {
                     {project.status === 'under_review' && (
                       <div className="mt-3">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs text-slate-400">Review Progress</span>
-                          <span className="text-xs text-slate-400">{project.progress}%</span>
+                          <span className="text-xs text-gray-600">Review Progress</span>
+                          <span className="text-xs text-gray-600">{project.progress}%</span>
                         </div>
                         <Progress value={project.progress} className="h-1.5" />
                       </div>
                     )}
 
                     <div className="flex gap-2 mt-3">
-                      <Button size="sm" variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                      <Button size="sm" variant="outline" className="border-gray-300 text-gray-900 hover:bg-gray-100">
                         View Details
                       </Button>
-                      <Button size="sm" variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                      <Button size="sm" variant="outline" className="border-gray-300 text-gray-900 hover:bg-gray-100">
                         Download Files
                       </Button>
                     </div>

@@ -42,6 +42,7 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
   const [status, setStatus] = useState<string>("No IFC loaded yet. Upload an IFC in chat to visualize it here.")
   const [complianceResult, setComplianceResult] = useState<ComplianceResult | null>(initialComplianceResult)
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null)
+  const [loadSimplified, setLoadSimplified] = useState<boolean>(false)
 
   const countsLabel = useMemo(() => {
     const c = ifcViz?.element_counts
@@ -198,11 +199,18 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
       const t = threeRef.current
       if (!t?.scene || !t?.THREE) return
 
-      setStatus("Loading IFC model…")
+      setStatus(loadSimplified ? "Loading simplified model (first floor)…" : "Loading IFC model…")
       const { IFCLoader } = await import("three/examples/jsm/loaders/IFCLoader.js")
 
       const loader = new IFCLoader()
       loader.ifcManager.setWasmPath("/wasm/")
+      
+      // For simplified loading, hide all but first storey
+      if (loadSimplified) {
+        loader.ifcManager.listener = () => {
+          // Will be populated with filtering logic
+        }
+      }
 
       if (t.ifcModel) {
         t.scene.remove(t.ifcModel)
@@ -212,6 +220,18 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
       loader.load(
         modelUrl,
         (ifcModel: any) => {
+          // If simplified mode, remove higher storeys
+          if (loadSimplified && ifcViz?.storeys && ifcViz.storeys > 1) {
+            let storeyCount = 0
+            ifcModel.traverse((child: any) => {
+              // Hide elements from storeys beyond the first
+              if (child.userData?.storeyIndex !== undefined && child.userData.storeyIndex > 0) {
+                child.visible = false
+              }
+            })
+            setStatus(`Simplified view: Showing first storey only (${ifcViz.storeys} total storeys).`)
+          }
+          
           t.ifcModel = ifcModel
           t.scene.add(ifcModel)
 
@@ -238,7 +258,7 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
     }
 
     load()
-  }, [modelUrl])
+  }, [modelUrl, loadSimplified])
 
   useEffect(() => {
     const t = threeRef.current
@@ -275,19 +295,19 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-3">
             <div className="bg-card border border-border rounded-lg overflow-hidden">
-              <div className="relative h-[62vh] min-h-[420px] bg-black">
+              <div className="relative h-[62vh] min-h-[420px] bg-white">
                 <div ref={mountRef} className="absolute inset-0" />
-                <div className="absolute left-3 top-3 rounded-md border border-slate-800 bg-black/70 px-3 py-2 text-xs text-slate-200 backdrop-blur">
+                <div className="absolute left-3 top-3 rounded-md border border-gray-300 bg-white/90 px-3 py-2 text-xs text-gray-900 backdrop-blur">
                   <div className="font-semibold">{ifcViz?.file_name ?? "IFC viewer"}</div>
-                  <div className="text-slate-300">{status}</div>
-                  {ifcViz?.storeys != null ? <div className="text-slate-300">Storeys: {ifcViz.storeys}</div> : null}
-                  {countsLabel ? <div className="text-slate-300">{countsLabel}</div> : null}
+                  <div className="text-gray-700">{status}</div>
+                  {ifcViz?.storeys != null ? <div className="text-gray-700">Storeys: {ifcViz.storeys}</div> : null}
+                  {countsLabel ? <div className="text-gray-700">{countsLabel}</div> : null}
                 </div>
                 <div className="absolute right-3 top-3 flex gap-2">
                   <Button
                     size="sm"
                     variant="secondary"
-                    className="bg-slate-900/80 backdrop-blur-sm border border-slate-800"
+                    className="bg-gray-200/80 backdrop-blur-sm border border-gray-300 text-gray-900"
                     onClick={() => {
                       const t = threeRef.current
                       if (!t?.controls) return
@@ -299,7 +319,7 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
                 </div>
                 {tooltip ? (
                   <div
-                    className="absolute z-20 max-w-[320px] rounded-md border border-slate-700 bg-black/90 px-3 py-2 text-xs text-slate-100 whitespace-pre-wrap"
+                    className="absolute z-20 max-w-[320px] rounded-md border border-gray-300 bg-white/90 px-3 py-2 text-xs text-gray-900 whitespace-pre-wrap"
                     style={{ left: Math.min(tooltip.x + 8, 300), top: Math.max(tooltip.y - 10, 12) }}
                   >
                     {tooltip.text}
@@ -335,10 +355,18 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
                   </>
                 ) : null}
                 {ifcViz?.warnings?.length ? (
-                  <div className="mt-3 text-xs text-amber-200">
+                  <div className="mt-3 text-xs text-amber-200 space-y-2">
                     {ifcViz.warnings.slice(0, 3).map((w, i) => (
                       <div key={i}>{w}</div>
                     ))}
+                    {ifcViz.warnings.some(w => w.includes('MB')) && !loadSimplified && (
+                      <button
+                        onClick={() => setLoadSimplified(true)}
+                        className="mt-3 px-3 py-1.5 bg-amber-900 hover:bg-amber-800 rounded text-amber-100 text-xs font-semibold transition-colors"
+                      >
+                        Load Simplified (First Floor Only)
+                      </button>
+                    )}
                   </div>
                 ) : null}
               </div>

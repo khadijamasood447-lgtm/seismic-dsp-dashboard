@@ -15,7 +15,7 @@ function prefix(key?: string | null) {
 export async function GET() {
   const ts = new Date().toISOString()
   const env = process.env.NODE_ENV || 'development'
-  const model = process.env.ANTHROPIC_MODEL || 'claude-3-haiku-20240307'
+  const model = process.env.ANTHROPIC_MODEL || 'claude-3-sonnet-20240229'
   const key = process.env.ANTHROPIC_API_KEY ? process.env.ANTHROPIC_API_KEY.trim() : undefined
 
   const out: any = {

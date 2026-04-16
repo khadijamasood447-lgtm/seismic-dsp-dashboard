@@ -2,6 +2,7 @@ import { Button } from './ui/button';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { ChevronDown, User, Mountain, Shield, BarChart3, FileCheck, Upload, FileText } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { supabase } from '@/lib/supabase/client';
 
 // Define the different pages users can navigate to
 type Page = 'home' | 'soil-analysis' | '3d-viz' | 'engineer' | 'authority';
@@ -61,6 +62,8 @@ export function HeroSection({ onNavigate, onSelectRole }: HeroSectionProps) {
   const [showImpactTitle, setShowImpactTitle] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
   const [showGraphCaption, setShowGraphCaption] = useState(false);
+  const [soilBackgroundUrl, setSoilBackgroundUrl] = useState('/videos/soilbackground.jpg');
+  const [aboutUsBackgroundUrl, setAboutUsBackgroundUrl] = useState('/videos/aboutus.jpeg');
   
   // ========== REFS ==========
   const heroSectionRef = useRef<HTMLDivElement>(null);
@@ -96,6 +99,35 @@ export function HeroSection({ onNavigate, onSelectRole }: HeroSectionProps) {
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    // Try Supabase first, then fall back to local paths
+    if (!supabase) {
+      // If no Supabase, use local paths
+      setSoilBackgroundUrl('/videos/soilbackground.jpg');
+      setAboutUsBackgroundUrl('/videos/aboutus.jpeg');
+      return;
+    }
+
+    async function loadAssetUrl(fileName: string, setter: (url: string) => void) {
+      try {
+        const { data, error } = await supabase.storage.from('images').getPublicUrl(fileName);
+        if (!error && data?.publicUrl) {
+          setter(data.publicUrl);
+          return;
+        }
+      } catch (e) {
+        // Supabase failed, will use fallback
+      }
+      
+      // Fallback to local path
+      const localPath = `/videos/${fileName}`;
+      setter(localPath);
+    }
+
+    loadAssetUrl('soilbackground.jpg', setSoilBackgroundUrl);
+    loadAssetUrl('aboutus.jpeg', setAboutUsBackgroundUrl);
   }, []);
 
   // Main animation sequence
@@ -420,7 +452,7 @@ export function HeroSection({ onNavigate, onSelectRole }: HeroSectionProps) {
   };
 
   return (
-    <div className="bg-[#0a0f1c]">
+    <div className="bg-white text-gray-900">
       <style jsx>{`
         @keyframes float {
           0%, 100% { transform: translateY(0px) scale(1); }
@@ -751,7 +783,7 @@ export function HeroSection({ onNavigate, onSelectRole }: HeroSectionProps) {
       >
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-50"
-          style={{ backgroundImage: "url('/videos/soilbackground.jpg')" }}
+          style={{ backgroundImage: `url('${soilBackgroundUrl}')` }}
         ></div>
         
         <div className="absolute inset-0 bg-[#0f172a]/18"></div>
@@ -870,7 +902,7 @@ export function HeroSection({ onNavigate, onSelectRole }: HeroSectionProps) {
           className={`absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-1000 ${
             showAboutUs ? 'opacity-38 translate-y-0' : 'opacity-38 translate-y-10'
           }`}
-          style={{ backgroundImage: "url('/videos/aboutus.jpeg')" }}
+          style={{ backgroundImage: `url('${aboutUsBackgroundUrl}')` }}
         ></div>
         
         <div className={`absolute inset-0 bg-[#0a0f1c]/70 transition-all duration-1000 ${

@@ -109,7 +109,7 @@ export function Navigation({ currentPage, onNavigate, userRole }: NavigationProp
             })}
             
             {userRole && (
-              <div className="ml-4 pl-4 border-l border-slate-700">
+              <div className="ml-4 pl-4 border-l border-gray-300">
                 {roleItems
                   .filter(item => item.role === userRole)
                   .map((item) => {

@@ -13,6 +13,7 @@ import { logger } from '@/lib/logger'
 import { getUserIdFromHeaders } from '@/lib/supabase/server'
 import { insertChatMessage, upsertChatSession } from '@/lib/supabase/app-data'
 import { getOrCachePrediction, vs30ToSiteClass } from '@/lib/prediction-cache'
+import { formatComparisonAsText, formatLocationDataAsText, formatSoilCompositionAsText } from '@/lib/response-formatter'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -134,14 +135,10 @@ function defaultAnswerFromData(data: any): ChatResponse {
   if (data.type === 'compare') {
     const a = data.a
     const b = data.b
+    const textComparison = formatComparisonAsText({ a, b, depth_m: data.depth_m })
     return {
-      response:
-        `| Sector | Vs at ${fmt(data.depth_m, 0)}m (m/s) | 80% PI (m/s) | N |\n` +
-        `|---|---:|---:|---:|\n` +
-        `| ${a.sector_norm} | ${fmt(a.vs_mean, 0)} | ${fmt(a.vs_p10_mean, 0)}-${fmt(a.vs_p90_mean, 0)} | ${a.n} |\n` +
-        `| ${b.sector_norm} | ${fmt(b.vs_mean, 0)} | ${fmt(b.vs_p10_mean, 0)}-${fmt(b.vs_p90_mean, 0)} | ${b.n} |\n\n` +
-        `Interpretation (screening-level): higher Vs generally implies stiffer soils and typically lower settlement potential, but site-specific investigation is still required.`,
-      suggested_actions: ['Show on map', 'Compare with another sector'],
+      response: textComparison,
+      suggested_actions: ['Show on map', 'Liquefaction assessment', 'Foundation recommendations'],
       data_quoted: { depth_m: data.depth_m, a, b },
     }
   }
@@ -151,11 +148,10 @@ function defaultAnswerFromData(data: any): ChatResponse {
     const p10 = fmt(data.p10, 0)
     const p90 = fmt(data.p90, 0)
     const d = fmt(data.depth_m, 0)
+    const textLocation = formatLocationDataAsText({ input: data.input, nearest: data.nearest, vs: data.vs, p10: data.p10, p90: data.p90 })
     return {
-      response:
-        `Nearest AOI prediction at ${d}m depth: Vs = ${vs} m/s (80% PI: ${p10}-${p90} m/s). ` +
-        `Nearest sector: ${data.nearest?.sector ?? 'N/A'}.`,
-      suggested_actions: ['Show on map', 'Export this data'],
+      response: textLocation,
+      suggested_actions: ['Show on map', 'Soil composition analysis', 'Liquefaction risk'],
       data_quoted: data,
     }
   }
@@ -316,12 +312,18 @@ async function runTool(name: string, input: any) {
     const fileName = String(input?.file_name ?? '').trim() || null
     if (!fileUrl) return { ok: false, error: 'Missing file_url' }
     const ctrl = new AbortController()
-    const t = setTimeout(() => ctrl.abort(), 20_000)
+    const t = setTimeout(() => ctrl.abort(), 30_000)
     try {
       const res = await fetch(fileUrl, { signal: ctrl.signal })
       if (!res.ok) return { ok: false, error: `Failed to fetch IFC (${res.status})` }
       const buf = await res.arrayBuffer()
-      if (buf.byteLength > 15_000_000) return { ok: false, error: 'IFC file too large for in-route preview (15MB limit).' }
+      
+      // Increased limit to 50MB, with warning for files over 15MB
+      const sizeMB = buf.byteLength / 1_000_000
+      const largeFileWarning = sizeMB > 15 ? `Note: File is ${sizeMB.toFixed(1)}MB (large). Visualization may be slower. ` : ''
+      
+      if (buf.byteLength > 50_000_000) return { ok: false, error: `IFC file too large (${sizeMB.toFixed(1)}MB). Max 50MB. Please reduce file size or upload a simplified version.` }
+      
       const text = new TextDecoder().decode(new Uint8Array(buf))
       const parsed = parseIfcLite(text)
       const storeys = (text.toUpperCase().match(/IFCBUILDINGSTOREY\(/g) ?? []).length
@@ -334,7 +336,7 @@ async function runTool(name: string, input: any) {
         location: parsed.location,
         storeys,
         element_counts: parsed.counts,
-        warnings: parsed.warnings ?? [],
+        warnings: (parsed.warnings ?? []).concat(largeFileWarning ? [largeFileWarning] : []),
         disclaimers: [
           'Visualization is for review and coordination; not a substitute for engineering design validation.',
           'PRELIMINARY ASSESSMENT - NOT FOR CONSTRUCTION. Verify with site-specific investigation and a licensed engineer.',
@@ -587,7 +589,15 @@ export async function POST(req: Request) {
   const stream = url.searchParams.get('stream') === '1'
 
   const apiKey = process.env.ANTHROPIC_API_KEY ? process.env.ANTHROPIC_API_KEY.trim() : undefined
-  const model = process.env.ANTHROPIC_MODEL || 'claude-3-haiku-20240307'
+  const model = process.env.ANTHROPIC_MODEL || 'claude-3-sonnet-20240229'
+
+  // Debug logging
+  logger.info('CHAT_START', 'env_check', {
+    api_key_exists: Boolean(apiKey),
+    api_key_length: apiKey?.length ?? 0,
+    model,
+    node_env: process.env.NODE_ENV,
+  })
 
   let body: ChatRequest
   try {
@@ -675,13 +685,13 @@ export async function POST(req: Request) {
       status: 'degraded',
       fallback_used: true,
       error_code: 'ANTHROPIC_MISSING_KEY',
-      suggestion: 'Set ANTHROPIC_API_KEY in the server environment and restart/redeploy.',
+      suggestion: 'Anthropic API not available: Ensure ANTHROPIC_API_KEY is set in .env.local, then restart the dev server: npm run dev',
       citations: [],
       suggested_questions: [],
       suggested_actions: fallback.suggested_actions,
       data_quoted: fallback.data_quoted ?? null,
       llm: { provider: 'anthropic', model, ok: false },
-      warning: 'Missing ANTHROPIC_API_KEY. Returning a non-LLM fallback answer.',
+      warning: 'ANTHROPIC_API_KEY is missing or empty. Using fallback (non-LLM) response. Check .env.local and restart server.',
       disclaimer: 'PRELIMINARY ASSESSMENT - NOT FOR CONSTRUCTION. Verify with site-specific investigation and a licensed engineer.',
     }
     try {
@@ -709,15 +719,29 @@ export async function POST(req: Request) {
   const hist = getMem(conversationId)
 
   const system =
-    'You are a structural and geotechnical engineering assistant for Islamabad, Pakistan. ' +
-    'You have access to screening-level model outputs: shallow Vs predictions (1-5 m) with uncertainty and gridded soil properties. ' +
-    'You can also query a structured Building Code database (BCP-SP 2021) for site classification and requirements. ' +
-    'When the user uploads an IFC for visualization, call visualize_ifc(file_url, file_name) first, then summarize what you see and ask whether to run screening checks. ' +
-    'When user asks for compliance, call extract_ifc_data and analyze_code_compliance. If requested, offer generate_compliance_report. ' +
-    'Be professional, cautious, and explicit about uncertainty. Always include a disclaimer: ' +
-    '"PRELIMINARY ASSESSMENT - NOT FOR CONSTRUCTION. Verify with site-specific investigation and a licensed engineer." ' +
-    'When asked about code, provide cited references. Never claim final compliance.\n' +
-    'You can call tools when needed: visualize_ifc, extract_ifc_data, analyze_code_compliance, generate_compliance_report, get_site_data, get_code_requirement, get_uncertainty_interpretation, get_limitations.\n' +
+    'You are a geotechnical engineering assistant specializing in soil liquefaction assessment and shallow shear wave velocity (Vs) predictions for Islamabad, Pakistan. ' +
+    'You have access to a trained machine learning model that predicts soil properties and liquefaction risk based on: ' +
+    '- Shallow Vs (shear wave velocity) at depths 1-5m with uncertainty bounds (p10/p90). ' +
+    '- Gridded soil composition: sand %, silt %, clay %. ' +
+    '- Bulk density, moisture content, and other geotechnical properties. ' +
+    '- Liquefaction factor and settlement risk classifications (high/medium/low). ' +
+    '- BCP-SP 2021 building code requirements for site classification. ' +
+    '\n' +
+    'SOIL MODEL CAPABILITIES:\n' +
+    '- Predict Vs at any location/depth in Islamabad using the trained ensemble model. ' +
+    '- Retrieve soil composition (sand/silt/clay %) and bulk properties (density, moisture). ' +
+    '- Assess liquefaction potential based on soil type, saturation, and cyclic loading. ' +
+    '- Classify sites (Class C/D/E) using Vs30 proxy for seismic design. ' +
+    '\n' +
+    'INTERACTION GUIDELINES:\n' +
+    '- When user provides coordinates/location, use get_site_data() to retrieve model predictions and soil properties. ' +
+    '- Explain liquefaction risk in context of soil type (clayey vs sandy), fines content, and saturation. ' +
+    '- When asked about IFC buildings, call analyze_code_compliance() with the site data. ' +
+    '- Always quantify uncertainty: reference p10 and p90 bounds for Vs predictions. ' +
+    '- Be explicit about model limitations: shallow Vs (1-5m) is screening-level, NOT a substitute for site investigation. ' +
+    '- Include mandatory disclaimer: "PRELIMINARY ASSESSMENT - NOT FOR CONSTRUCTION. Verify with site-specific geotechnical investigation and a licensed engineer." ' +
+    '\n' +
+    'AVAILABLE TOOLS: get_site_data, get_code_requirement, analyze_code_compliance, generate_compliance_report, visualize_ifc, extract_ifc_data. ' +
     'Return STRICT JSON with keys: response (string), citations (array), suggested_questions (array). No extra text.\n' +
     'Context JSON (read-only): ' +
     JSON.stringify({
@@ -782,10 +806,10 @@ export async function POST(req: Request) {
     const emsg = String(e?.message ?? 'Claude API failed; fallback used')
     const authHint =
       /invalid x-api-key|authentication_error|401/i.test(emsg)
-        ? 'Anthropic is offline: ANTHROPIC_API_KEY is missing/invalid. Set ANTHROPIC_API_KEY in your server environment (no quotes/backticks) and restart the server.'
+        ? 'Anthropic API authentication failed: Verify ANTHROPIC_API_KEY is correct (no spaces/quotes). Restart the dev server: npm run dev'
         : /model|not found|404/i.test(emsg)
-          ? 'Anthropic is offline: the configured ANTHROPIC_MODEL may be invalid/unavailable. Try claude-3-5-sonnet-20241022 or claude-3-sonnet-20240229.'
-          : 'Anthropic is offline: check server logs and environment variables.'
+          ? `Anthropic model error: The configured model (${params.model}) is invalid. Ensure ANTHROPIC_MODEL=claude-3-sonnet-20240229 in .env.local and restart the server.`
+          : 'Anthropic API error: Check server logs and verify ANTHROPIC_API_KEY and ANTHROPIC_MODEL in .env.local are set correctly. Restart: npm run dev'
     const errorCode =
       /invalid x-api-key|authentication_error|401/i.test(emsg)
         ? 'ANTHROPIC_AUTH_ERROR'

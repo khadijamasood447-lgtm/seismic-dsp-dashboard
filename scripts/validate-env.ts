@@ -48,7 +48,7 @@ async function main() {
     String(process.env.SKIP_ENV_VALIDATE ?? '').trim() !== '1' &&
     String(process.env.ENFORCE_ENV_VALIDATE ?? '').trim() === '1'
 
-  const model = process.env.ANTHROPIC_MODEL || 'claude-3-haiku-20240307'
+  const model = process.env.ANTHROPIC_MODEL || 'claude-3-sonnet-20240229'
   const key = process.env.ANTHROPIC_API_KEY || ''
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
   const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''

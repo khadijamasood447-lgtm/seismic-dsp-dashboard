@@ -15,6 +15,7 @@ type ChatMsg = {
   reportUrl?: string | null
   status?: string
   errorCode?: string | null
+  attachedFile?: { name: string; type: string; url: string }
 }
 
 type ChatContext = {
@@ -219,8 +220,13 @@ export default function ChatbotWidget() {
     const complianceRequested = /\b(analy[sz]e|compliance|check code|is this compliant|bcp|building code)\b/i.test(msg)
     const activeSession = sessionId || (await createSession(msg.slice(0, 60), true))
     setInput("")
-    setIfcFile(null)
-    const userMsg: ChatMsg = { id: uid(), role: "user", text: msg }
+    
+    const userMsg: ChatMsg = { 
+      id: uid(), 
+      role: "user", 
+      text: msg,
+      attachedFile: ifcFile ? { name: ifcFile.name, type: "IFC Model", url: "" } : undefined
+    }
     setMessages((m) => [...m, userMsg])
     appendLocalMessage(clientId, activeSession, { id: userMsg.id, role: "user", text: msg, created_at: new Date().toISOString(), synced: false })
     setLoadingText(complianceRequested ? "Analyzing building model against BCP-SP 2021..." : "Claude is thinking...")
@@ -250,10 +256,13 @@ export default function ChatbotWidget() {
                 : `Error: ${err}`
           setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: friendly, errorCode: code || null } : x)))
           appendLocalMessage(clientId, activeSession, { id: assistantId, role: "assistant", text: friendly, created_at: new Date().toISOString(), synced: false })
+          setIfcFile(null)
           return
         }
         attachments = [{ type: "ifc", file_url: String(upJson.file_url), file_name: String(upJson.file_name ?? ifcFile.name) }]
       }
+      
+      setIfcFile(null)
 
       const triggerIfcViz = (ifcViz: any) => {
         if (!ifcViz || !ifcViz.ok || !ifcViz.model_url) return
@@ -472,20 +481,20 @@ export default function ChatbotWidget() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="group fixed right-0 top-1/2 -translate-y-1/2 z-[60] rounded-l-xl bg-black text-white border border-white/35 px-2 py-3 shadow-[0_0_22px_rgba(255,255,255,0.35)] hover:shadow-[0_0_40px_rgba(255,255,255,0.65)] transition transform hover:scale-[1.06]"
+        className="group fixed right-0 top-1/2 -translate-y-1/2 z-[60] rounded-l-xl bg-white text-gray-900 border border-gray-300 px-2 py-3 shadow-[0_0_22px_rgba(0,0,0,0.15)] hover:shadow-[0_0_40px_rgba(0,0,0,0.25)] transition transform hover:scale-[1.06]"
         aria-label="Open chat"
       >
         <span className="flex flex-col items-center gap-2">
-          <span className="h-6 w-6 rounded-full bg-white/10 border border-white/25 flex items-center justify-center text-xs font-bold drop-shadow-[0_0_10px_rgba(255,255,255,0.55)]">
+          <span className="h-6 w-6 rounded-full bg-gray-200 border border-gray-400 flex items-center justify-center text-xs font-bold drop-shadow-[0_0_10px_rgba(0,0,0,0.1)]">
             G
           </span>
           <span
-            className="text-[11px] font-semibold uppercase tracking-[0.30em] drop-shadow-[0_0_14px_rgba(255,255,255,0.75)]"
+            className="text-[11px] font-semibold uppercase tracking-[0.30em] drop-shadow-[0_0_14px_rgba(0,0,0,0.1)]"
             style={{ writingMode: "vertical-rl", textOrientation: "mixed" } as any}
           >
             ASK AI
           </span>
-          <span className="text-white/90 opacity-0 group-hover:opacity-100 transition drop-shadow-[0_0_12px_rgba(255,255,255,0.65)] group-hover:animate-bounce">
+          <span className="text-gray-900/90 opacity-0 group-hover:opacity-100 transition drop-shadow-[0_0_12px_rgba(0,0,0,0.1)] group-hover:animate-bounce">
             ←
           </span>
         </span>
@@ -495,7 +504,7 @@ export default function ChatbotWidget() {
         <div className="fixed inset-0 z-[70] flex justify-end">
           <div
             ref={panelRef}
-            className="h-full w-[620px] max-w-[96vw] bg-black shadow-2xl border-l border-slate-800 flex"
+            className="h-full w-[620px] max-w-[96vw] bg-white shadow-2xl border-l border-gray-300 flex"
           >
             <SessionHistory
               sessions={sessions}
@@ -507,12 +516,12 @@ export default function ChatbotWidget() {
             />
 
             <div className="flex-1 flex flex-col">
-              <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+              <div className="px-4 py-3 border-b border-gray-300 flex items-center justify-between">
                 <div>
-                  <div className="font-semibold text-white tracking-wide">Vs Assistant</div>
-                  <div className="text-xs text-slate-300 tracking-wide">{contextLabel}</div>
+                  <div className="font-semibold text-gray-900 tracking-wide">Vs Assistant</div>
+                  <div className="text-xs text-gray-600 tracking-wide">{contextLabel}</div>
                   {llmStatus ? (
-                    <div className="text-[11px] text-slate-400 tracking-wide">
+                    <div className="text-[11px] text-gray-500 tracking-wide">
                       LLM: {llmStatus.provider} {llmStatus.ok ? "online" : "offline"} {llmStatus.model ? `(${llmStatus.model})` : ""}
                     </div>
                   ) : null}
@@ -520,14 +529,14 @@ export default function ChatbotWidget() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={runDiagnostics}
-                    className="rounded-md border border-slate-800 bg-slate-900 px-2 py-1 text-[11px] tracking-wide text-white hover:bg-slate-800 disabled:opacity-60"
+                    className="rounded-md border border-gray-300 bg-gray-100 px-2 py-1 text-[11px] tracking-wide text-gray-900 hover:bg-gray-200 disabled:opacity-60"
                     disabled={diagBusy}
                   >
                     Diagnostics
                   </button>
                   <button
                     onClick={() => setOpen(false)}
-                    className="h-8 w-8 rounded-md hover:bg-slate-900 text-white"
+                    className="h-8 w-8 rounded-md hover:bg-gray-200 text-gray-900"
                     aria-label="Close chat"
                   >
                     ×
@@ -535,51 +544,88 @@ export default function ChatbotWidget() {
                 </div>
               </div>
 
-              <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-3 bg-black">
-                {messages.map((m) => (
+              <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-3 bg-white">
+                {messages.map((m, idx) => (
                   <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                     <div className="max-w-[85%]">
+                      {/* File Attachment */}
+                      {m.attachedFile && (
+                        <div className="mb-2 flex items-center gap-2 rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-[11px] text-gray-700">
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2m0 0v-8m0 8l-6-4m6 4l6-4" />
+                          </svg>
+                          <span className="truncate font-medium">{m.attachedFile.name}</span>
+                          <span className="text-[10px] text-gray-500">({m.attachedFile.type})</span>
+                        </div>
+                      )}
+
                       <div
                         className={`whitespace-pre-wrap rounded-lg px-3 py-2 text-[13px] leading-relaxed tracking-wide ${
                           m.role === "user"
                             ? "bg-[#0d9488] text-white"
-                            : "bg-slate-900 text-white border border-slate-800"
+                            : "bg-gray-100 text-gray-900 border border-gray-300"
                         }`}
                       >
                         {m.text}
                       </div>
-                      {m.role === "assistant" && m.text ? (
-                        <div className="mt-2 flex items-center justify-between gap-2">
+
+                      {/* Message Controls */}
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <div className="flex gap-2">
                           <button
                             onClick={() => navigator.clipboard.writeText(m.text)}
-                            className="text-[11px] tracking-wide text-slate-300 hover:text-white"
+                            className="text-[11px] tracking-wide text-gray-600 hover:text-gray-900"
+                            title="Copy message"
                           >
-                            Copy
+                            📋 Copy
                           </button>
-                          {m.citations?.length ? (
-                            <div className="text-[11px] text-slate-400 tracking-wide">
-                              {m.citations.slice(0, 2).map((c, i) => (
-                                <span key={i}>
-                                  {c.doc ?? "code"}
-                                  {c.section ? ` · ${c.section}` : ""}
-                                  {c.table ? ` · table ${c.table}` : ""}
-                                  {c.clause ? ` · clause ${c.clause}` : ""}
-                                  {i === 0 && m.citations!.length > 1 ? " | " : ""}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span />
+                          {m.role === "user" && idx > 0 && (
+                            <button
+                              onClick={() => {
+                                setInput(m.text)
+                                setMessages(messages.slice(0, idx))
+                              }}
+                              className="text-[11px] tracking-wide text-gray-600 hover:text-gray-900"
+                              title="Edit and retry from this message"
+                            >
+                              ↩️ Retry
+                            </button>
+                          )}
+                          {(idx === messages.length - 1 || m.role === "user") && (
+                            <button
+                              onClick={() => {
+                                setMessages(messages.filter((_, i) => i !== idx))
+                              }}
+                              className="text-[11px] tracking-wide text-red-600 hover:text-red-900"
+                              title="Delete message"
+                            >
+                              🗑️ Delete
+                            </button>
                           )}
                         </div>
-                      ) : null}
+                        {m.citations?.length ? (
+                          <div className="text-[11px] text-gray-500 tracking-wide">
+                            {m.citations.slice(0, 2).map((c, i) => (
+                              <span key={i}>
+                                {c.doc ?? "code"}
+                                {c.section ? ` · ${c.section}` : ""}
+                                {c.table ? ` · table ${c.table}` : ""}
+                                {c.clause ? ` · clause ${c.clause}` : ""}
+                                {i === 0 && m.citations!.length > 1 ? " | " : ""}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span />
+                        )}
+                      </div>
                       {m.role === "assistant" && m.suggestedActions?.length ? (
                         <div className="mt-2 flex flex-wrap gap-2">
                           {m.suggestedActions.map((a) => (
                             <button
                               key={a}
                               onClick={() => runAction(a, m)}
-                              className="rounded-md border border-slate-800 bg-slate-900 px-2 py-1 text-[11px] tracking-wide text-white hover:bg-slate-800"
+                              className="rounded-md border border-gray-300 bg-gray-100 px-2 py-1 text-[11px] tracking-wide text-gray-900 hover:bg-gray-200"
                             >
                               {a}
                             </button>
@@ -590,12 +636,12 @@ export default function ChatbotWidget() {
                         <div className="mt-2 flex items-center gap-2">
                           <button
                             onClick={() => generateComplianceReport(m.id, m.complianceResult)}
-                            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] tracking-wide text-white hover:bg-slate-800"
+                            className="rounded-md border border-gray-300 bg-gray-100 px-2 py-1 text-[11px] tracking-wide text-gray-900 hover:bg-gray-200"
                           >
                             Generate Report
                           </button>
                           {m.reportUrl ? (
-                            <a href={m.reportUrl} target="_blank" rel="noreferrer" className="text-[11px] text-sky-300 hover:text-sky-200">
+                            <a href={m.reportUrl} target="_blank" rel="noreferrer" className="text-[11px] text-blue-600 hover:text-blue-700">
                               Download PDF
                             </a>
                           ) : null}
@@ -606,16 +652,16 @@ export default function ChatbotWidget() {
                 ))}
                 {loading ? (
                   <div className="flex justify-start">
-                    <div className="max-w-[85%] rounded-lg px-3 py-2 text-[13px] tracking-wide bg-slate-900 text-white border border-slate-800">
+                    <div className="max-w-[85%] rounded-lg px-3 py-2 text-[13px] tracking-wide bg-gray-100 text-gray-900 border border-gray-300">
                       {loadingText}
                     </div>
                   </div>
                 ) : null}
               </div>
 
-              <div className="border-t border-slate-800 p-3">
+              <div className="border-t border-gray-300 p-3">
                 <div className="flex gap-2 items-center">
-                  <label className="rounded-md border border-slate-700 bg-black text-white px-2 py-2 text-sm cursor-pointer hover:bg-slate-900">
+                  <label className="rounded-md border border-gray-300 bg-gray-100 text-gray-900 px-2 py-2 text-sm cursor-pointer hover:bg-gray-200">
                     <input
                       type="file"
                       accept=".ifc"
@@ -637,7 +683,7 @@ export default function ChatbotWidget() {
                         send()
                       }
                     }}
-                    className="flex-1 rounded-md border border-slate-700 bg-black text-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#0d9488]/40"
+                    className="flex-1 rounded-md border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#0d9488]/40"
                     placeholder='Ask e.g. "Vs at 2m in G-6"'
                   />
                   <button
@@ -649,14 +695,14 @@ export default function ChatbotWidget() {
                   </button>
                 </div>
                 {ifcFile ? (
-                  <div className="mt-2 flex items-center justify-between text-[11px] text-slate-300">
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-gray-600">
                     <div className="truncate">Attached: {ifcFile.name}</div>
-                    <button className="text-slate-300 hover:text-white" onClick={() => setIfcFile(null)} disabled={loading}>
+                    <button className="text-gray-600 hover:text-gray-900" onClick={() => setIfcFile(null)} disabled={loading}>
                       Remove
                     </button>
                   </div>
                 ) : null}
-                <div className="mt-2 text-[11px] text-slate-300">
+                <div className="mt-2 text-[11px] text-gray-600">
                   Research-grade predictions; not a substitute for site-specific geotechnical investigation.
                 </div>
               </div>

@@ -4,6 +4,7 @@ import { Input } from './ui/input';
 import { Button } from './ui/button';
 import 'ol/ol.css';
 import ChatbotWidget from './ChatbotWidget';
+import { Soil3DProfile } from './Soil3DProfile';
 
 interface SoilData {
   location: string;
@@ -81,6 +82,7 @@ export function SoilAnalysis() {
   const [searchQuery, setSearchQuery] = useState('');
   const [data, setData] = useState<SoilData>(defaultData);
   const [selectedSite, setSelectedSite] = useState<string>('');
+  const [show3DView, setShow3DView] = useState<boolean>(false);
   const mapRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<any>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -650,7 +652,7 @@ export function SoilAnalysis() {
   const hasSelection = data.location !== defaultData.location;
 
   return (
-    <div className="h-screen overflow-hidden bg-background text-foreground">
+    <div className="h-screen overflow-hidden bg-white text-gray-900">
       <ChatbotWidget />
       <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-3 h-full flex flex-col">
         {/* Header and Search Bar */}
@@ -662,7 +664,7 @@ export function SoilAnalysis() {
           <div className="lg:col-span-8">
             <div className="flex gap-2">
               <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
                 type="text"
                 placeholder="Search site/sector (e.g., G-6) or coordinates (lat, lon)"
@@ -671,18 +673,18 @@ export function SoilAnalysis() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleSearch()
                 }}
-                className="pl-10 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 h-10 text-sm"
+                className="pl-10 bg-gray-100 border-gray-300 text-gray-900 placeholder:text-gray-500 h-10 text-sm"
               />
               </div>
               <Button
-                className="h-10 bg-slate-700 hover:bg-slate-600 text-white"
+                className="h-10 bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={handleSearch}
                 disabled={isLoading}
               >
                 Search
               </Button>
               <Button
-                className="h-10 bg-slate-900 hover:bg-slate-800 text-white border border-slate-700 px-4"
+                className="h-10 bg-gray-200 hover:bg-gray-300 text-gray-900 border border-gray-400 px-4"
                 onClick={resetZoom}
                 variant="outline"
               >
@@ -693,9 +695,9 @@ export function SoilAnalysis() {
         </div>
 
         {mapError && (
-          <div className="mb-3 bg-slate-900/50 border border-red-700/50 rounded-lg p-3">
-            <div className="text-xs uppercase tracking-wider text-red-300 mb-1">Map Error</div>
-            <div className="text-sm text-red-200">{mapError}</div>
+          <div className="mb-3 bg-red-50 border border-red-300 rounded-lg p-3">
+            <div className="text-xs uppercase tracking-wider text-red-700 mb-1">Map Error</div>
+            <div className="text-sm text-red-600">{mapError}</div>
           </div>
         )}
 
@@ -706,7 +708,7 @@ export function SoilAnalysis() {
             {/* Row 1: Shear Modulus and Bender Element */}
             <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 mt-1">
               {/* Shear Modulus */}
-              <div className="sm:col-span-2 bg-slate-900/50 border border-slate-700/50 rounded-lg p-2">
+              <div className="sm:col-span-2 bg-gray-50 border border-gray-300 rounded-lg p-2">
                 <h3 className="text-sm uppercase tracking-wider text-[#0d9488] mb-1">Shear Modulus</h3>
                 <div className="flex items-center justify-center">
                   <div className="relative w-[148px] h-[148px]">
@@ -715,7 +717,7 @@ export function SoilAnalysis() {
                         cx="40"
                         cy="40"
                         r="35"
-                        stroke="#1e293b"
+                        stroke="#d1d5db"
                         strokeWidth="6"
                         fill="none"
                       />
@@ -731,21 +733,21 @@ export function SoilAnalysis() {
                       />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <div className="text-4xl font-semibold text-white leading-none">{data.shearModulus}</div>
-                      <div className="text-xs tracking-wide text-slate-300">MPa</div>
+                      <div className="text-4xl font-semibold text-gray-900 leading-none">{data.shearModulus}</div>
+                      <div className="text-xs tracking-wide text-gray-600">MPa</div>
                     </div>
                   </div>
                 </div>
-                <div className="mt-1 text-xs text-slate-400 text-center">0–100 MPa</div>
+                <div className="mt-1 text-xs text-gray-600 text-center">0–100 MPa</div>
               </div>
 
               {/* Bender Element */}
-              <div className="sm:col-span-3 bg-slate-900/50 border border-slate-700/50 rounded-lg p-2">
+              <div className="sm:col-span-3 bg-gray-50 border border-gray-300 rounded-lg p-2">
                 <h3 className="text-sm uppercase tracking-wider text-[#0d9488] mb-1">Bender Element</h3>
                 <div className="flex items-center justify-center gap-3">
                   <div className="relative w-[140px] h-[140px]">
                     <svg className="transform -rotate-90 w-[140px] h-[140px]" viewBox="0 0 80 80">
-                        <circle cx="40" cy="40" r="35" stroke="#1e293b" strokeWidth="6" fill="none" />
+                        <circle cx="40" cy="40" r="35" stroke="#d1d5db" strokeWidth="6" fill="none" />
                         <circle
                           cx="40"
                           cy="40"
@@ -758,13 +760,13 @@ export function SoilAnalysis() {
                         />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <div className="text-3xl font-semibold text-white leading-none">{safeToFixed(data.liquefactionFactor, 0)}</div>
-                        <div className="text-xs tracking-wide text-slate-300">Vs (m/s)</div>
+                        <div className="text-3xl font-semibold text-gray-900 leading-none">{safeToFixed(data.liquefactionFactor, 0)}</div>
+                        <div className="text-xs tracking-wide text-gray-600">Vs (m/s)</div>
                       </div>
                     </div>
                     <div className="relative w-[140px] h-[140px]">
                       <svg className="transform -rotate-90 w-[140px] h-[140px]" viewBox="0 0 80 80">
-                        <circle cx="40" cy="40" r="35" stroke="#1e293b" strokeWidth="6" fill="none" />
+                        <circle cx="40" cy="40" r="35" stroke="#d1d5db" strokeWidth="6" fill="none" />
                         <circle
                           cx="40"
                           cy="40"
@@ -777,10 +779,10 @@ export function SoilAnalysis() {
                         />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <div className="text-3xl font-semibold text-white leading-none">
+                        <div className="text-3xl font-semibold text-gray-900 leading-none">
                           {data.pWaveVelocity ? safeToFixed(data.pWaveVelocity, 0) : 'N/A'}
                         </div>
-                        <div className="text-xs tracking-wide text-slate-300">Vp (m/s)</div>
+                        <div className="text-xs tracking-wide text-gray-600">Vp (m/s)</div>
                       </div>
                     </div>
                 </div>
@@ -788,23 +790,21 @@ export function SoilAnalysis() {
             </div>
 
             {/* Row 2: Soil Profile Properties */}
-            <div className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-3 flex-1 min-h-0">
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-3 flex-1 min-h-0">
               <h3 className="text-base uppercase tracking-wider text-[#0d9488] mb-2">Soil Profile Properties</h3>
               <div className="grid grid-cols-2 grid-rows-3 gap-3 auto-rows-fr h-full">
                 {[
                   { label: 'Soil Type', value: data.soilType },
                   { label: 'Bulk Density', value: data.dryDensity },
                   { label: 'Moisture', value: data.moisture },
-                  { label: 'LL', value: data.liquidLimit },
                   { label: '% Sand', value: data.sandContent },
-                  { label: 'Gs', value: data.specificGravity },
-                  { label: 'Runoff Class', value: data.runoffClass },
+                  { label: '% Silt', value: data.siltContent },
+                  { label: '% Clay', value: data.clayContent },
                 ]
-                  .filter((x) => String(x.value ?? '').trim() !== '' && String(x.value) !== 'N/A')
                   .map((x) => (
-                    <div key={x.label} className="bg-slate-800/50 rounded p-2.5 flex flex-col justify-center">
-                      <div className="text-[14px] tracking-wide text-slate-300 mb-1">{x.label}</div>
-                      <div className="text-[18px] font-semibold text-white leading-tight">{x.value}</div>
+                    <div key={x.label} className="bg-white border border-gray-200 rounded p-2.5 flex flex-col justify-center">
+                      <div className="text-[14px] tracking-wide text-gray-600 mb-1">{x.label}</div>
+                      <div className="text-[18px] font-semibold text-gray-900 leading-tight">{x.value || 'N/A'}</div>
                     </div>
                   ))}
               </div>
@@ -812,7 +812,7 @@ export function SoilAnalysis() {
           </div>
 
           {/* Right Column - Map */}
-          <div className="lg:col-span-5 lg:self-start bg-slate-900/30 border border-slate-700/50 rounded-lg overflow-hidden relative h-[320px] lg:h-[560px] min-h-0">
+          <div className="lg:col-span-5 lg:self-start bg-white border border-gray-300 rounded-lg overflow-hidden relative h-[320px] lg:h-[560px] min-h-0">
             <div 
               ref={mapRef}
               className="w-full h-full"
@@ -820,13 +820,13 @@ export function SoilAnalysis() {
             
             {/* Map Instructions */}
             {!hasSelection && (
-              <div className="absolute top-3 left-3 z-10 bg-slate-900/80 backdrop-blur-sm text-white text-xs px-3 py-2 rounded border border-slate-700/50">
+              <div className="absolute top-3 left-3 z-10 bg-white/90 backdrop-blur-sm text-gray-900 text-xs px-3 py-2 rounded border border-gray-300">
                 Click any location within the AOI rectangle to sample grid values
               </div>
             )}
 
             {isLoading && (
-              <div className="absolute top-3 right-3 z-10 bg-slate-900/80 backdrop-blur-sm text-white text-xs px-3 py-2 rounded border border-slate-700/50">
+              <div className="absolute top-3 right-3 z-10 bg-white/90 backdrop-blur-sm text-gray-900 text-xs px-3 py-2 rounded border border-gray-300">
                 Sampling...
               </div>
             )}
@@ -834,7 +834,7 @@ export function SoilAnalysis() {
             {/* Zoom Controls */}
             <div className="absolute bottom-3 right-3 flex flex-col gap-1 z-10">
               <button 
-                className="bg-slate-900/80 backdrop-blur-sm text-white p-1.5 rounded hover:bg-slate-800 transition-colors border border-slate-700/50"
+                className="bg-white/90 backdrop-blur-sm text-gray-900 p-1.5 rounded hover:bg-gray-100 transition-colors border border-gray-300"
                 onClick={() => map?.getView().setZoom(map.getView().getZoom() + 1)}
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -842,7 +842,7 @@ export function SoilAnalysis() {
                 </svg>
               </button>
               <button 
-                className="bg-slate-900/80 backdrop-blur-sm text-white p-1.5 rounded hover:bg-slate-800 transition-colors border border-slate-700/50"
+                className="bg-white/90 backdrop-blur-sm text-gray-900 p-1.5 rounded hover:bg-gray-100 transition-colors border border-gray-300"
                 onClick={() => map?.getView().setZoom(map.getView().getZoom() - 1)}
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -850,7 +850,7 @@ export function SoilAnalysis() {
                 </svg>
               </button>
               <button 
-                className="bg-slate-900/80 backdrop-blur-sm text-white p-1.5 rounded hover:bg-slate-800 transition-colors border border-slate-700/50"
+                className="bg-white/90 backdrop-blur-sm text-gray-900 p-1.5 rounded hover:bg-gray-100 transition-colors border border-gray-300"
                 onClick={resetZoom}
                 title="Reset to default view"
               >
@@ -858,23 +858,85 @@ export function SoilAnalysis() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
               </button>
+              <button 
+                className={`p-1.5 rounded hover:transition-colors border ${
+                  show3DView 
+                    ? 'bg-teal-100 text-teal-900 border-teal-300' 
+                    : 'bg-white/90 text-gray-900 hover:bg-gray-100 border-gray-300'
+                }`}
+                onClick={() => setShow3DView(!show3DView)}
+                title="Toggle 3D soil profile view"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m0 0l-2-1m2 1v2.5M14 4l-2 1m0 0l-2-1m2 1v2.5" />
+                </svg>
+              </button>
             </div>
 
             {/* Coordinates and Scale */}
             <div className="absolute bottom-3 left-3 z-10 space-y-1">
-              <div className="bg-slate-900/80 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded border border-slate-700/50">
+              <div className="bg-white/90 backdrop-blur-sm text-gray-900 text-[10px] px-2 py-1 rounded border border-gray-300">
                 <div>Lat: {coordinates.lat}</div>
                 <div>Lon: {coordinates.lon}</div>
               </div>
               
               {scale && (
-                <div className="bg-slate-900/80 backdrop-blur-sm text-white text-[10px] px-2 py-0.5 rounded border border-slate-700/50">
+                <div className="bg-white/90 backdrop-blur-sm text-gray-900 text-[10px] px-2 py-0.5 rounded border border-gray-300">
                   {scale}
                 </div>
               )}
             </div>
           </div>
         </div>
+
+        {/* 3D Soil Profile Modal */}
+        {show3DView && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg border border-gray-300 w-full h-4/5 flex flex-col">
+              {/* Modal header */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-300 bg-gray-50">
+                <h2 className="text-lg font-semibold text-gray-900">3D Soil Profile</h2>
+                <button
+                  onClick={() => setShow3DView(false)}
+                  className="text-gray-600 hover:text-gray-900 p-1 rounded hover:bg-gray-200"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              {/* 3D View */}
+              <div className="flex-1 overflow-hidden bg-white">
+                <Soil3DProfile 
+                  data={
+                    coordinates.lat !== 0 && coordinates.lon !== 0 
+                      ? {
+                          location: { lat: coordinates.lat, lon: coordinates.lon },
+                          layers: [
+                            {
+                              depth: 2,
+                              thickness: 2,
+                              soilType: data.soilType || 'Soil Layer 1',
+                              sandPercent: parseFloat(data.sandContent as string) || 0,
+                              siltPercent: parseFloat(data.siltContent as string) || 0,
+                              clayPercent: parseFloat(data.clayContent as string) || 0,
+                              bulkDensity: parseFloat(data.dryDensity as string) || 1.8,
+                              moisture: parseFloat(data.moisture as string) || 15,
+                              vs: safeNumber(data.liquefactionFactor),
+                              liquefactionRisk: data.loadingRisk,
+                            },
+                          ],
+                          vs30: safeNumber(data.liquefactionFactor),
+                          siteClass: 'D',
+                        }
+                      : null
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -64,8 +64,8 @@ export function AuthorityDashboard() {
     switch (priority) {
       case 'high': return 'bg-red-500/10 text-red-500 border-red-500/30';
       case 'medium': return 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30';
-      case 'low': return 'bg-slate-500/10 text-slate-500 border-slate-500/30';
-      default: return 'bg-slate-500/10 text-slate-500 border-slate-500/30';
+      case 'low': return 'bg-gray-500/10 text-gray-500 border-gray-500/30';
+      default: return 'bg-gray-500/10 text-gray-500 border-gray-500/30';
     }
   };
 
@@ -180,7 +180,7 @@ export function AuthorityDashboard() {
                         </td>
                         <td className="p-4">
                           <div className="flex items-center gap-2">
-                            <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden max-w-[80px]">
+                            <div className="flex-1 h-2 bg-gray-300 rounded-full overflow-hidden max-w-[80px]">
                               <div 
                                 className="h-full"
                                 style={{ 
@@ -227,8 +227,8 @@ export function AuthorityDashboard() {
 
             {/* Selected Project Details */}
             {selectedProject && (
-              <div className="bg-slate-900 border border-slate-700/50 rounded-lg p-6">
-                <h3 className="text-xl text-white mb-4">Project Details</h3>
+              <div className="bg-white border border-gray-300 rounded-lg p-6">
+                <h3 className="text-xl text-gray-900 mb-4">Project Details</h3>
                 {(() => {
                   const project = pendingProjects.find(p => p.id === selectedProject);
                   if (!project) return null;
@@ -237,26 +237,26 @@ export function AuthorityDashboard() {
                     <div className="grid grid-cols-2 gap-6">
                       <div className="space-y-4">
                         <div>
-                          <div className="text-xs text-slate-400 mb-1">Project Name</div>
-                          <div className="text-white">{project.name}</div>
+                          <div className="text-xs text-gray-600 mb-1">Project Name</div>
+                          <div className="text-gray-900">{project.name}</div>
                         </div>
                         <div>
-                          <div className="text-xs text-slate-400 mb-1">Submitted By</div>
-                          <div className="text-white">{project.engineer}</div>
+                          <div className="text-xs text-gray-600 mb-1">Submitted By</div>
+                          <div className="text-gray-900">{project.engineer}</div>
                         </div>
                         <div>
-                          <div className="text-xs text-slate-400 mb-1">Submission Date</div>
-                          <div className="text-white">{project.submittedDate}</div>
+                          <div className="text-xs text-gray-600 mb-1">Submission Date</div>
+                          <div className="text-gray-900">{project.submittedDate}</div>
                         </div>
                       </div>
                       <div className="space-y-4">
                         <div>
-                          <div className="text-xs text-slate-400 mb-1">AI Compliance Score</div>
+                          <div className="text-xs text-gray-600 mb-1">AI Compliance Score</div>
                           <div className={`text-xl ${getScoreColor(project.aiScore)}`}>{project.aiScore}/100</div>
                         </div>
                         <div>
-                          <div className="text-xs text-slate-400 mb-1">Attached Files</div>
-                          <div className="text-white">{project.filesCount} documents</div>
+                          <div className="text-xs text-gray-600 mb-1">Attached Files</div>
+                          <div className="text-gray-900">{project.filesCount} documents</div>
                         </div>
                         <div className="pt-2">
                           <Button className="w-full bg-[#0d9488] hover:bg-[#0d9488]/90 text-white">
