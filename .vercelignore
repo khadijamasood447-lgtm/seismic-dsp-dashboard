@@ -5,8 +5,12 @@ node_modules/
 ISLAMABD DATA/
 data/training/
 pdf_extracted/
-public/videos/
 public/liquefaction/
+
+# keep images under public/videos (used by hero), ignore only large video files
+public/videos/*.mp4
+public/videos/*.mov
+public/videos/*.mkv
 
 **/*.tif
 **/*.tiff
@@ -14,4 +18,3 @@ public/liquefaction/
 **/*.zip
 
 logs/
-
