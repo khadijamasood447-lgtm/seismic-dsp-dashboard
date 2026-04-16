@@ -1,17 +1,6 @@
-.git/
-.next/
-node_modules/
-
-ISLAMABD DATA/
-data/training/
-pdf_extracted/
-public/videos/
-public/liquefaction/
-
-**/*.tif
-**/*.tiff
-**/*.aux.xml
-**/*.zip
-
-logs/
-
+﻿scripts/validate-env.cjs
+scripts/copy-web-ifc-wasm.cjs
+.git
+README.md
+**/*.test.js
+**/*.spec.js
