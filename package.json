@@ -8,7 +8,7 @@
     "prebuild": "node scripts/prebuild-clean.cjs && node scripts/validate-env.cjs",
     "build": "next build",
     "start": "next start",
-    "postinstall": "node scripts/copy-web-ifc-wasm.cjs",
+    
     "lint": "next lint"
   },
   "dependencies": {

@@ -1,4 +1,4 @@
-﻿// scripts/copy-web-ifc-wasm.cjs
+﻿﻿// scripts/copy-web-ifc-wasm.cjs
 const fs = require('fs');
 const path = require('path');
 
