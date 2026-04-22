@@ -7,11 +7,17 @@ declare global {
 
 function buildPool() {
   const databaseUrl = process.env.DATABASE_URL
+  
   if (!databaseUrl) {
-    throw new Error(
-      'DATABASE_URL is not set. Please configure it in your Vercel project environment variables. ' +
-      'Example: postgresql://postgres:[PASSWORD]@db.dhzuemsyhhftcdtvpkpw.supabase.co:5432/postgres?pgbouncer=true&sslmode=require'
-    )
+    // Return a dummy object during build or if not configured
+    // This prevents the application from crashing at startup
+    return {
+      query: async () => {
+        throw new Error('DATABASE_URL is not configured. Direct SQL queries are unavailable.')
+      },
+      on: () => {},
+      end: async () => {},
+    } as any
   }
 
   const isSupabase = databaseUrl.includes('supabase.co')

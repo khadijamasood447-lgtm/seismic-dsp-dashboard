@@ -1,35 +1,36 @@
 import { NextResponse } from 'next/server'
-import { getDbPool } from '@/lib/db'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 import fs from 'fs'
 import path from 'path'
 
 export const dynamic = 'force-dynamic'
 
-const pool = getDbPool()
-
 export async function GET() {
   try {
-    // 1. Try to fetch from database first
-    try {
-      const result = await pool.query(`
-        SELECT boundary as geometry 
-        FROM public.aoi_boundaries 
-        ORDER BY created_at DESC 
-        LIMIT 1
-      `)
-      
-      if (result.rows?.[0]) {
-        return NextResponse.json({
-          type: 'FeatureCollection',
-          features: [{
-            type: 'Feature',
-            properties: { name: 'AOI (Database)' },
-            geometry: result.rows[0].geometry
-          }]
-        })
+    // 1. Try to fetch from database first using Supabase Client
+    const supabase = createSupabaseServerClient()
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('aoi_boundaries')
+          .select('boundary')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+
+        if (data?.boundary) {
+          return NextResponse.json({
+            type: 'FeatureCollection',
+            features: [{
+              type: 'Feature',
+              properties: { name: 'AOI (Supabase)' },
+              geometry: data.boundary
+            }]
+          })
+        }
+      } catch (supabaseError) {
+        console.warn('AOI Supabase fetch failed, falling back to local file:', supabaseError)
       }
-    } catch (dbError) {
-      console.warn('AOI Database fetch failed, falling back to local file:', dbError)
     }
 
     // 2. Fallback to local GeoJSON file if database fails
