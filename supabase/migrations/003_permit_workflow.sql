@@ -1,12 +1,9 @@
-create extension if not exists pgcrypto;
-create extension if not exists postgis;
-
 create table if not exists public.permit_applications (
   id uuid primary key default gen_random_uuid(),
   application_number text unique,
   engineer_id uuid references auth.users(id),
   ifc_file_url text,
-  building_location geometry(Point, 4326),
+  building_location jsonb,
   site_class text,
   vs_predictions jsonb,
   status text not null default 'pending',

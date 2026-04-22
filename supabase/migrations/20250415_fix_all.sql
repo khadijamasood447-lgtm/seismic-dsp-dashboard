@@ -5,7 +5,7 @@
 create table if not exists public.aoi_boundaries (
   id uuid primary key default gen_random_uuid(),
   name text not null default 'Islamabad AOI',
-  boundary geometry(Polygon, 4326) not null,
+  boundary jsonb not null,
   metadata jsonb default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -84,7 +84,6 @@ begin
 end $$;
 
 -- 5. Performance Indexes
-create index if not exists idx_aoi_boundary_geom on public.aoi_boundaries using gist(boundary);
 create index if not exists idx_reports_status on public.reports(status);
 create index if not exists idx_chat_messages_metadata on public.chat_messages using gin(metadata);
 

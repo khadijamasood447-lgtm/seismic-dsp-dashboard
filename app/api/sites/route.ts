@@ -56,14 +56,6 @@ function pickCoordColumn(columns: string[], kind: 'lon' | 'lat') {
   return hit2?.raw ?? null
 }
 
-function hasGeomColumn(columns: string[]) {
-  const lower = new Set(columns.map((c) => c.toLowerCase()))
-  if (lower.has('geom')) return 'geom'
-  if (lower.has('geometry')) return 'geometry'
-  if (lower.has('the_geom')) return 'the_geom'
-  return null
-}
-
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -88,12 +80,9 @@ export async function GET(request: NextRequest) {
         const cols = (r.cols as string[]) ?? []
         const lonCol = pickCoordColumn(cols, 'lon')
         const latCol = pickCoordColumn(cols, 'lat')
-        const geomCol = hasGeomColumn(cols)
-        const hasSite = cols.some((c) => ['site', 'name'].includes(c.toLowerCase()))
-        const hasId = cols.some((c) => c.toLowerCase() === 'id')
-        const hasCoords = Boolean(lonCol && latCol) || Boolean(geomCol)
+        const hasCoords = Boolean(lonCol && latCol)
         const score = (hasCoords ? 10 : 0) + (hasSite ? 3 : 0) + (hasId ? 1 : 0)
-        return { schema, name, cols, lonCol, latCol, geomCol, score }
+        return { schema, name, cols, lonCol, latCol, score }
       })
       .filter((c: any) => c.score >= 10)
       .sort((a: any, b: any) => {
@@ -123,24 +112,15 @@ export async function GET(request: NextRequest) {
     let geoJsonSql = 'null as geometry'
     let lonExpr = 'null'
     let latExpr = 'null'
-    if (best.geomCol) {
-      const geomIdent = safeIdent(best.geomCol)
-      if (!geomIdent) {
-        return NextResponse.json({ error: 'Unsafe geometry column' }, { status: 500 })
-      }
-      geoJsonSql = `ST_AsGeoJSON(${geomIdent}) as geometry`
-      lonExpr = `ST_X(${geomIdent}::geometry)`
-      latExpr = `ST_Y(${geomIdent}::geometry)`
-    } else {
-      const lonIdent = best.lonCol ? safeIdent(best.lonCol) : null
-      const latIdent = best.latCol ? safeIdent(best.latCol) : null
-      if (!lonIdent || !latIdent) {
-        return NextResponse.json({ error: 'Missing lon/lat columns' }, { status: 500 })
-      }
-      lonExpr = lonIdent
-      latExpr = latIdent
-      geoJsonSql = `json_build_object('type','Point','coordinates', json_build_array(${lonIdent}, ${latIdent})) as geometry`
+    const lonIdent = best.lonCol ? safeIdent(best.lonCol) : null
+    const latIdent = best.latCol ? safeIdent(best.latCol) : null
+    if (!lonIdent || !latIdent) {
+      return NextResponse.json({ error: 'Missing lon/lat columns' }, { status: 500 })
     }
+    lonExpr = lonIdent
+    latExpr = latIdent
+    geoJsonSql = `json_build_object('type','Point','coordinates', json_build_array(${lonIdent}, ${latIdent})) as geometry`
+
     const q = `
       select *, ${geoJsonSql}, ${lonExpr} as longitude, ${latExpr} as latitude
       from ${schemaIdent}.${tableIdent}

@@ -12,7 +12,7 @@ export async function GET() {
     // 1. Try to fetch from database first
     try {
       const result = await pool.query(`
-        SELECT ST_AsGeoJSON(boundary)::json as geometry 
+        SELECT boundary as geometry 
         FROM public.aoi_boundaries 
         ORDER BY created_at DESC 
         LIMIT 1
