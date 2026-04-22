@@ -12,21 +12,16 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Force webpack configuration
-  webpack: (config, { buildId, dev, isServer, defaultLoaders, nextRuntime, webpack }) => {
-    // Fix for hashSalt issue
+  webpack: (config, { buildId, isServer }) => {
     if (config.output) {
       config.output.hashSalt = buildId || 'default-salt';
     }
-    
-    // Ensure proper chunk handling
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
       };
     }
-    
     return config;
   },
 }
