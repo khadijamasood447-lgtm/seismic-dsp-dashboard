@@ -131,7 +131,7 @@ export function SoilAnalysis() {
         const islamabadCoords = fromLonLat([73.0479, 33.6844]);
 
         const boundarySource = new VectorSource({
-          url: '/api/islamabad/boundary',
+          url: '/api/aoi/boundary',
           format: new GeoJSON({ featureProjection: 'EPSG:3857' })
         });
 

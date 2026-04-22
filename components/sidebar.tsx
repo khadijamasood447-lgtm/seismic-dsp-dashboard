@@ -26,7 +26,6 @@ const sections = [
   { id: "geo-llm", label: "Geo-LLM Assistant", icon: MessageSquare },
   { id: "approvals", label: "Approvals", icon: CheckCircle },
   { id: "upload", label: "Upload Center", icon: Upload },
-  { id: "reports", label: "Reports", icon: FileText },
 ]
 
 export function Sidebar({ activeSection, onSectionChange, isOpen }: SidebarProps) {

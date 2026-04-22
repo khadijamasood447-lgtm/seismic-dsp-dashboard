@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import SessionHistory from "@/components/SessionHistory"
 import { appendLocalMessage, loadLocalMessages, loadLocalSessions, saveLocalSessions } from "@/lib/localStorageSync"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 
 type ChatMsg = {
   id: string
@@ -138,6 +140,11 @@ export default function ChatbotWidget() {
           role: m.role === "assistant" ? "assistant" : "user",
           text: String(m.content ?? ""),
           citations: Array.isArray(m.citations) ? m.citations : [],
+          attachedFile: m.metadata?.attachments?.[0] ? { 
+            name: m.metadata.attachments[0].file_name, 
+            type: "IFC Model", 
+            url: m.metadata.attachments[0].file_url 
+          } : undefined
         }))
         setMessages(restored)
         return
@@ -217,20 +224,27 @@ export default function ChatbotWidget() {
   const send = async () => {
     const msg = input.trim()
     if ((!msg && !ifcFile) || loading) return
+    
     const complianceRequested = /\b(analy[sz]e|compliance|check code|is this compliant|bcp|building code)\b/i.test(msg)
     const activeSession = sessionId || (await createSession(msg.slice(0, 60), true))
     setInput("")
     
+    let attachedFile: ChatMsg["attachedFile"] = undefined
+    if (ifcFile) {
+      attachedFile = { name: ifcFile.name, type: "IFC Model", url: "" }
+    }
+
     const userMsg: ChatMsg = { 
       id: uid(), 
       role: "user", 
-      text: msg,
-      attachedFile: ifcFile ? { name: ifcFile.name, type: "IFC Model", url: "" } : undefined
+      text: msg || (ifcFile ? "Analyzing uploaded IFC model..." : ""),
+      attachedFile
     }
     setMessages((m) => [...m, userMsg])
-    appendLocalMessage(clientId, activeSession, { id: userMsg.id, role: "user", text: msg, created_at: new Date().toISOString(), synced: false })
+    
     setLoadingText(complianceRequested ? "Analyzing building model against BCP-SP 2021..." : "Claude is thinking...")
     setLoading(true)
+
     try {
       const assistantId = uid()
       setMessages((m) => [...m, { id: assistantId, role: "assistant", text: "" }])
@@ -245,141 +259,57 @@ export default function ChatbotWidget() {
           body: fd,
         })
         const upJson = await up.json().catch(() => null)
-        if (!up.ok || !upJson?.ok || !upJson?.file_url) {
-          const code = String(upJson?.error_code ?? "")
-          const err = String(upJson?.error ?? "IFC upload failed")
-          const friendly =
-            code === "STORAGE_BUCKET_MISSING"
-              ? "⚠️ Storage configuration issue.\nPlease create Supabase Storage buckets: ifc_uploads (and reports).\nThen retry the IFC upload."
-              : code === "STORAGE_NOT_CONFIGURED"
-                ? "⚠️ Storage is not configured on the server.\nSet NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in your deployment.\nThen retry."
-                : `Error: ${err}`
-          setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: friendly, errorCode: code || null } : x)))
-          appendLocalMessage(clientId, activeSession, { id: assistantId, role: "assistant", text: friendly, created_at: new Date().toISOString(), synced: false })
-          setIfcFile(null)
-          return
+        if (up.ok && upJson?.ok && upJson?.file_url) {
+          attachments.push({ type: "ifc", file_url: upJson.file_url, file_name: ifcFile.name })
+          // Update user message with the real URL
+          setMessages(prev => prev.map(m => m.id === userMsg.id ? { ...m, attachedFile: { ...m.attachedFile!, url: upJson.file_url } } : m))
         }
-        attachments = [{ type: "ifc", file_url: String(upJson.file_url), file_name: String(upJson.file_name ?? ifcFile.name) }]
-      }
-      
-      setIfcFile(null)
-
-      const triggerIfcViz = (ifcViz: any) => {
-        if (!ifcViz || !ifcViz.ok || !ifcViz.model_url) return
-        try {
-          localStorage.setItem("seismic_ifc_model_url", JSON.stringify({ url: ifcViz.model_url, file_name: ifcViz.file_name ?? null }))
-        } catch {}
-        window.dispatchEvent(new CustomEvent("seismic-navigate", { detail: { page: "3d-viz" } }))
-        window.dispatchEvent(new CustomEvent("seismic-ifc-model", { detail: ifcViz }))
+        setIfcFile(null)
       }
 
-      const triggerCompliance = (complianceResult: any) => {
-        if (!complianceResult || !Array.isArray(complianceResult?.findings)) return
-        window.dispatchEvent(new CustomEvent("seismic-compliance-result", { detail: complianceResult }))
-      }
-
-      const res = await fetch("/api/chat?stream=1", {
+      // Use the new streaming API
+      const response = await fetch("/api/chat/stream", {
         method: "POST",
         headers: headers(),
-        body: JSON.stringify({ message: msg || "Visualize this IFC file", conversation_id: activeSession, client_id: clientId, context, attachments }),
+        body: JSON.stringify({
+          message: msg || "Visualize this IFC file",
+          conversation_id: activeSession,
+          attachments,
+          context
+        }),
       })
-      const ct = res.headers.get("content-type") ?? ""
-      if (!res.ok) {
-        const t = await res.text().catch(() => "")
-        setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: `Error: ${t || "Chat failed"}` } : x)))
-        return
-      }
-      if (!ct.includes("text/event-stream")) {
-        const json = await res.json().catch(() => null)
-        let text = String(json?.response ?? json?.text ?? "").trim()
-        const suggested = Array.isArray(json?.suggested_actions) ? json.suggested_actions : []
-        const citations = Array.isArray(json?.citations) ? json.citations : []
-        const dataQuoted = json?.data_quoted ?? null
-        const complianceResult = json?.compliance_result ?? null
-        const status = json?.status ? String(json.status) : ""
-        const errorCode = json?.error_code ? String(json.error_code) : null
-        if (status === "degraded") {
-          const prefix = "⚠️ AI service unavailable — using local responses."
-          if (!text.startsWith(prefix)) text = `${prefix}\n\n${text}`
-        }
-        setMessages((m) =>
-          m.map((x) =>
-            x.id === assistantId ? { ...x, text, suggestedActions: suggested, citations, dataQuoted, complianceResult, status, errorCode } : x,
-          ),
-        )
-        appendLocalMessage(clientId, activeSession, { id: assistantId, role: "assistant", text, created_at: new Date().toISOString(), synced: false })
-        if (json?.ifc_viz) triggerIfcViz(json.ifc_viz)
-        if (complianceResult) triggerCompliance(complianceResult)
-        if (json?.llm && typeof json.llm === "object") {
-          const p = String(json.llm.provider ?? "anthropic")
-          const mm = String(json.llm.model ?? "")
-          const ok = Boolean(json.llm.ok)
-          setLlmStatus({ provider: p, model: mm, ok })
-        }
-        await refreshSessions()
-        return
-      }
 
-      const reader = res.body?.getReader()
-      if (!reader) {
-        setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: "Error: streaming unavailable" } : x)))
-        return
-      }
+      if (!response.ok) throw new Error("Stream request failed")
+
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error("No reader")
+
+      let fullText = ""
       const dec = new TextDecoder()
-      let buf = ""
-      let meta: any = null
-      let streamed = ""
-
-      const applyToken = (t: string) => {
-        streamed += t
-        setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: (x.text ?? "") + t } : x)))
-      }
-
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        buf += dec.decode(value, { stream: true })
-        while (true) {
-          const idx = buf.indexOf("\n\n")
-          if (idx === -1) break
-          const frame = buf.slice(0, idx)
-          buf = buf.slice(idx + 2)
-          const lines = frame.split("\n")
-          const ev = lines.find((l) => l.startsWith("event:"))?.slice(6).trim() ?? ""
-          const dataLine = lines.find((l) => l.startsWith("data:"))?.slice(5).trim() ?? ""
-          const payload = dataLine ? JSON.parse(dataLine) : null
-          if (ev === "open") {
-            meta = payload
-            if (payload?.ifc_viz) triggerIfcViz(payload.ifc_viz)
-            if (payload?.compliance_result) triggerCompliance(payload.compliance_result)
-          }
-          if (ev === "token" && payload?.t) applyToken(String(payload.t))
-          if (ev === "done") break
-        }
+        const chunk = dec.decode(value)
+        fullText += chunk
+        setMessages((prev) => 
+          prev.map((m) => m.id === assistantId ? { ...m, text: fullText } : m)
+        )
       }
 
-      if (meta?.llm) {
-        setLlmStatus({ provider: String(meta.llm.provider ?? "anthropic"), model: String(meta.llm.model ?? ""), ok: Boolean(meta.llm.ok) })
+      // Check for special instructions in fullText (like triggering visualization)
+      if (fullText.includes("3d-viz") || attachments.length > 0) {
+        // Optional: trigger logic for 3D viz if needed
       }
-      const citations = Array.isArray(meta?.citations) ? meta.citations : []
-      const suggestedActions = Array.isArray(meta?.suggested_actions)
-        ? meta.suggested_actions
-        : Array.isArray(meta?.suggested_questions)
-          ? meta.suggested_questions
-          : []
-      setMessages((m) =>
-        m.map((x) =>
-          x.id === assistantId
-            ? { ...x, citations, suggestedActions, complianceResult: meta?.compliance_result ?? null }
-            : x,
-        ),
-      )
-      appendLocalMessage(clientId, activeSession, { id: assistantId, role: "assistant", text: streamed, created_at: new Date().toISOString(), synced: false })
-      await refreshSessions()
-    } catch {
-      setMessages((m) => [...m, { id: uid(), role: "assistant", text: "Error: request failed" }])
+
+    } catch (error: any) {
+      console.error("Chat error:", error)
+      setMessages((m) => [
+        ...m,
+        { id: uid(), role: "assistant", text: `Error: ${error.message || "Failed to get response"}`, status: "error" },
+      ])
     } finally {
       setLoading(false)
+      refreshSessions()
     }
   }
 
@@ -416,22 +346,14 @@ export default function ChatbotWidget() {
     if (diagBusy) return
     setDiagBusy(true)
     try {
-      const [envRes, storageRes, dbRes] = await Promise.all([
-        fetch("/api/diagnose/env", { headers: { "x-client-id": clientId } }),
-        fetch("/api/diagnose/storage", { headers: { "x-client-id": clientId } }),
-        fetch("/api/db/diagnose", { headers: { "x-client-id": clientId } }),
+      const [healthRes] = await Promise.all([
+        fetch("/api/health", { headers: { "x-client-id": clientId } }),
       ])
-      const envJson = await envRes.json().catch(() => null)
-      const storageJson = await storageRes.json().catch(() => null)
-      const dbJson = await dbRes.json().catch(() => null)
+      const healthJson = await healthRes.json().catch(() => null)
       const text =
         "Diagnostics:\n\n" +
-        "ENV:\n" +
-        JSON.stringify(envJson, null, 2) +
-        "\n\nSTORAGE:\n" +
-        JSON.stringify(storageJson, null, 2) +
-        "\n\nDB:\n" +
-        JSON.stringify(dbJson, null, 2)
+        "HEALTH CHECK:\n" +
+        JSON.stringify(healthJson, null, 2)
       setMessages((m) => [...m, { id: uid(), role: "assistant", text }])
     } catch {
       setMessages((m) => [...m, { id: uid(), role: "assistant", text: "Diagnostics failed. Check server logs." }])
@@ -560,13 +482,21 @@ export default function ChatbotWidget() {
                       )}
 
                       <div
-                        className={`whitespace-pre-wrap rounded-lg px-3 py-2 text-[13px] leading-relaxed tracking-wide ${
+                        className={`rounded-lg px-3 py-2 text-[13px] leading-relaxed tracking-wide ${
                           m.role === "user"
                             ? "bg-[#0d9488] text-white"
                             : "bg-gray-100 text-gray-900 border border-gray-300"
                         }`}
                       >
-                        {m.text}
+                        {m.role === "assistant" ? (
+                          <div className="prose prose-sm max-w-none prose-p:my-1 prose-table:my-2 prose-th:bg-gray-200 prose-td:border prose-td:px-2 prose-td:py-1">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {m.text}
+                            </ReactMarkdown>
+                          </div>
+                        ) : (
+                          <div className="whitespace-pre-wrap">{m.text}</div>
+                        )}
                       </div>
 
                       {/* Message Controls */}
@@ -693,17 +623,6 @@ export default function ChatbotWidget() {
                   >
                     Send
                   </button>
-                </div>
-                {ifcFile ? (
-                  <div className="mt-2 flex items-center justify-between text-[11px] text-gray-600">
-                    <div className="truncate">Attached: {ifcFile.name}</div>
-                    <button className="text-gray-600 hover:text-gray-900" onClick={() => setIfcFile(null)} disabled={loading}>
-                      Remove
-                    </button>
-                  </div>
-                ) : null}
-                <div className="mt-2 text-[11px] text-gray-600">
-                  Research-grade predictions; not a substitute for site-specific geotechnical investigation.
                 </div>
               </div>
             </div>

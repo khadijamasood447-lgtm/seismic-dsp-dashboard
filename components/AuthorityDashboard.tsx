@@ -91,7 +91,7 @@ export function AuthorityDashboard() {
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <Shield className="w-8 h-8 text-[#0d9488]" />
-            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">Authority Portal</h1>
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">CDA Portal</h1>
           </div>
           <p className="text-sm sm:text-base text-muted-foreground">Review and approve geotechnical project submissions</p>
         </div>

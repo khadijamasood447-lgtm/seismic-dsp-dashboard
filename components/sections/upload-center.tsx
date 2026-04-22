@@ -3,8 +3,10 @@
 import { useRef, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Upload, File, Trash2 } from "lucide-react"
+import { Upload, File, Trash2, FilePlus } from "lucide-react"
 import type { User } from "@/lib/auth-context"
+import { ReportUpload } from "@/components/ReportUpload"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface UploadCenterProps {
   user: User | null
@@ -112,102 +114,115 @@ export function UploadCenter({ user }: UploadCenterProps) {
         <p className="text-muted-foreground">Manage project files and data uploads</p>
       </div>
 
-      {/* Upload Area */}
-      <Card
-        className={`p-12 border-2 border-dashed transition-colors ${
-          isDragging ? "border-primary bg-primary/5" : "border-border"
-        }`}
-        onDragOver={(e) => {
-          e.preventDefault()
-          setIsDragging(true)
-        }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault()
-          setIsDragging(false)
-          const f = e.dataTransfer.files?.[0]
-          if (f) analyzeIfc(f)
-        }}
-      >
-        <div className="flex flex-col items-center justify-center text-center">
-          <div className="w-16 h-16 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
-            <Upload className="w-8 h-8 text-primary" />
-          </div>
-          <h3 className="text-lg font-semibold mb-2">Drag files here or click to browse</h3>
-          <p className="text-muted-foreground mb-4 max-w-md">
-            Upload an IFC file to run a preliminary code screening report (BCP-SP 2021)
-          </p>
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".ifc"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) analyzeIfc(f)
-              e.currentTarget.value = ""
+      <Tabs defaultValue="ifc" className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="ifc">IFC Analysis</TabsTrigger>
+          <TabsTrigger value="compliance">Compliance Reports</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="ifc" className="space-y-6">
+          {/* Upload Area */}
+          <Card
+            className={`p-12 border-2 border-dashed transition-colors ${
+              isDragging ? "border-primary bg-primary/5" : "border-border"
+            }`}
+            onDragOver={(e) => {
+              e.preventDefault()
+              setIsDragging(true)
             }}
-          />
-          <Button className="bg-primary hover:bg-primary/90" onClick={() => inputRef.current?.click()} disabled={uploading}>
-            {uploading ? "Analyzing..." : "Select IFC"}
-          </Button>
-        </div>
-      </Card>
-
-      {error ? (
-        <Card className="p-4 border border-red-500/30 bg-red-500/5 text-red-200">
-          <div className="font-medium">Error</div>
-          <div className="text-sm">{error}</div>
-        </Card>
-      ) : null}
-
-      {analysis ? (
-        <Card className="p-5 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-lg font-semibold text-foreground">IFC Screening Results</div>
-              <div className="text-xs text-muted-foreground">{analysis.disclaimer}</div>
-            </div>
-            <Button className="bg-primary hover:bg-primary/90" onClick={generateReport}>
-              Generate Full Report
-            </Button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Card className="p-4">
-              <div className="text-sm font-semibold mb-2">Building</div>
-              <div className="text-sm text-muted-foreground">
-                Name: {analysis.building_info?.name ?? "N/A"} | Height:{" "}
-                {analysis.building_info?.height_m != null ? `${Number(analysis.building_info.height_m).toFixed(1)} m` : "N/A"}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setIsDragging(false)
+              const f = e.dataTransfer.files?.[0]
+              if (f) analyzeIfc(f)
+            }}
+          >
+            <div className="flex flex-col items-center justify-center text-center">
+              <div className="w-16 h-16 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
+                <Upload className="w-8 h-8 text-primary" />
               </div>
-              <div className="text-sm text-muted-foreground">
-                Elements: columns {analysis.building_info?.element_counts?.columns ?? 0}, beams{" "}
-                {analysis.building_info?.element_counts?.beams ?? 0}, footings {analysis.building_info?.element_counts?.footings ?? 0}
-              </div>
-            </Card>
-            <Card className="p-4">
-              <div className="text-sm font-semibold mb-2">Site Conditions</div>
-              <div className="text-sm text-muted-foreground">
-                Site Class (proxy): {analysis.site_conditions?.site_class ?? "N/A"} | Vs30:{" "}
-                {analysis.site_conditions?.vs30_m_s != null ? `${Number(analysis.site_conditions.vs30_m_s).toFixed(0)} m/s` : "N/A"}
-              </div>
-              <div className="text-sm text-muted-foreground">
-                Location: lat {Number(analysis.site_conditions?.location?.lat).toFixed(5)}, lon{" "}
-                {Number(analysis.site_conditions?.location?.lon).toFixed(5)}
-              </div>
-            </Card>
-          </div>
-          <Card className="p-4">
-            <div className="text-sm font-semibold mb-2">Findings</div>
-            <div className="space-y-2">
-              {(analysis.inconsistencies ?? []).map((x: any, i: number) => (
-                <div key={i} className="text-sm text-muted-foreground">
-                  <span className="font-semibold text-foreground">{String(x.severity ?? "").toUpperCase()}</span>: {x.description}
-                </div>
-              ))}
+              <h3 className="text-lg font-semibold mb-2">Drag files here or click to browse</h3>
+              <p className="text-muted-foreground mb-4 max-w-md">
+                Upload an IFC file to run a preliminary code screening report (BCP-SP 2021)
+              </p>
+              <input
+                ref={inputRef}
+                type="file"
+                accept=".ifc"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) analyzeIfc(f)
+                  e.currentTarget.value = ""
+                }}
+              />
+              <Button className="bg-primary hover:bg-primary/90" onClick={() => inputRef.current?.click()} disabled={uploading}>
+                {uploading ? "Analyzing..." : "Select IFC"}
+              </Button>
             </div>
           </Card>
-        </Card>
-      ) : null}
+
+          {error ? (
+            <Card className="p-4 border border-red-500/30 bg-red-500/5 text-red-200">
+              <div className="font-medium">Error</div>
+              <div className="text-sm">{error}</div>
+            </Card>
+          ) : null}
+
+          {analysis ? (
+            <Card className="p-5 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-lg font-semibold text-foreground">IFC Screening Results</div>
+                  <div className="text-xs text-muted-foreground">{analysis.disclaimer}</div>
+                </div>
+                <Button className="bg-primary hover:bg-primary/90" onClick={generateReport}>
+                  Generate Full Report
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Card className="p-4">
+                  <div className="text-sm font-semibold mb-2">Building</div>
+                  <div className="text-sm text-muted-foreground">
+                    Name: {analysis.building_info?.name ?? "N/A"} | Height:{" "}
+                    {analysis.building_info?.height_m != null ? `${Number(analysis.building_info.height_m).toFixed(1)} m` : "N/A"}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Elements: columns {analysis.building_info?.element_counts?.columns ?? 0}, beams{" "}
+                    {analysis.building_info?.element_counts?.beams ?? 0}, footings {analysis.building_info?.element_counts?.footings ?? 0}
+                  </div>
+                </Card>
+                <Card className="p-4">
+                  <div className="text-sm font-semibold mb-2">Site Conditions</div>
+                  <div className="text-sm text-muted-foreground">
+                    Site Class (proxy): {analysis.site_conditions?.site_class ?? "N/A"} | Vs30:{" "}
+                    {analysis.site_conditions?.vs30_m_s != null ? `${Number(analysis.site_conditions.vs30_m_s).toFixed(0)} m/s` : "N/A"}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Location: lat {Number(analysis.site_conditions?.location?.lat).toFixed(5)}, lon{" "}
+                    {Number(analysis.site_conditions?.location?.lon).toFixed(5)}
+                  </div>
+                </Card>
+              </div>
+              <Card className="p-4">
+                <div className="text-sm font-semibold mb-2">Findings</div>
+                <div className="space-y-2">
+                  {(analysis.inconsistencies ?? []).map((x: any, i: number) => (
+                    <div key={i} className="text-sm text-muted-foreground">
+                      <span className="font-semibold text-foreground">{String(x.severity ?? "").toUpperCase()}</span>: {x.description}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </Card>
+          ) : null}
+        </TabsContent>
+
+        <TabsContent value="compliance">
+          <ReportUpload />
+        </TabsContent>
+      </Tabs>
 
       {/* File List */}
       <div>

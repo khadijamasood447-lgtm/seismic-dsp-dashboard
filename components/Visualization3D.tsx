@@ -35,6 +35,7 @@ function readStoredIfc() {
 
 export function Visualization3D({ initialComplianceResult = null as ComplianceResult | null }) {
   const mountRef = useRef<HTMLDivElement | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const threeRef = useRef<any>(null)
   const complianceRef = useRef<ComplianceResult | null>(initialComplianceResult)
   const [ifcViz, setIfcViz] = useState<IfcViz | null>(null)
@@ -43,6 +44,29 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
   const [complianceResult, setComplianceResult] = useState<ComplianceResult | null>(initialComplianceResult)
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null)
   const [loadSimplified, setLoadSimplified] = useState<boolean>(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  const toggleFullscreen = () => {
+    if (!containerRef.current) return
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch(err => {
+        console.error(`Error attempting to enable full-screen mode: ${err.message}`)
+      })
+    } else {
+      document.exitFullscreen()
+    }
+  }
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+      setTimeout(() => {
+        if (threeRef.current?.onResize) threeRef.current.onResize()
+      }, 100)
+    }
+    document.addEventListener('fullscreenchange', handleFsChange)
+    return () => document.removeEventListener('fullscreenchange', handleFsChange)
+  }, [])
 
   const countsLabel = useMemo(() => {
     const c = ifcViz?.element_counts
@@ -286,50 +310,61 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
   return (
     <div className="min-h-screen bg-background text-foreground">
       <ChatbotWidget />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground mb-2">3D Visualizer</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">Upload an IFC in chat to visualize the model here</p>
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-4">
+        <div className="mb-4 flex justify-between items-end">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">3D Visualizer</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">Visualize uploaded IFC models and compliance findings</p>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-3">
-            <div className="bg-card border border-border rounded-lg overflow-hidden">
-              <div className="relative h-[62vh] min-h-[420px] bg-white">
-                <div ref={mountRef} className="absolute inset-0" />
-                <div className="absolute left-3 top-3 rounded-md border border-gray-300 bg-white/90 px-3 py-2 text-xs text-gray-900 backdrop-blur">
-                  <div className="font-semibold">{ifcViz?.file_name ?? "IFC viewer"}</div>
-                  <div className="text-gray-700">{status}</div>
-                  {ifcViz?.storeys != null ? <div className="text-gray-700">Storeys: {ifcViz.storeys}</div> : null}
-                  {countsLabel ? <div className="text-gray-700">{countsLabel}</div> : null}
-                </div>
-                <div className="absolute right-3 top-3 flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="bg-gray-200/80 backdrop-blur-sm border border-gray-300 text-gray-900"
-                    onClick={() => {
-                      const t = threeRef.current
-                      if (!t?.controls) return
-                      t.controls.reset()
-                    }}
-                  >
-                    Reset View
-                  </Button>
-                </div>
-                {tooltip ? (
-                  <div
-                    className="absolute z-20 max-w-[320px] rounded-md border border-gray-300 bg-white/90 px-3 py-2 text-xs text-gray-900 whitespace-pre-wrap"
-                    style={{ left: Math.min(tooltip.x + 8, 300), top: Math.max(tooltip.y - 10, 12) }}
-                  >
-                    {tooltip.text}
-                  </div>
-                ) : null}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-9">
+            <div ref={containerRef} className={`bg-card border border-border rounded-lg overflow-hidden relative ${isFullscreen ? 'h-screen w-screen fixed inset-0 z-[100]' : 'h-[75vh] min-h-[500px]'}`}>
+              <div ref={mountRef} className="absolute inset-0" />
+              
+              <div className="absolute left-3 top-3 rounded-md border border-gray-300 bg-white/90 px-3 py-2 text-[11px] text-gray-900 backdrop-blur shadow-sm z-10">
+                <div className="font-semibold">{ifcViz?.file_name ?? "IFC viewer"}</div>
+                <div className="text-gray-700">{status}</div>
+                {ifcViz?.storeys != null ? <div className="text-gray-700">Storeys: {ifcViz.storeys}</div> : null}
+                {countsLabel ? <div className="text-gray-700">{countsLabel}</div> : null}
               </div>
+
+              <div className="absolute right-3 top-3 flex gap-2 z-10">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="bg-white/80 backdrop-blur-sm border border-gray-300 text-gray-900 h-8 px-2"
+                  onClick={() => {
+                    const t = threeRef.current
+                    if (!t?.controls) return
+                    t.controls.reset()
+                  }}
+                >
+                  Reset View
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="bg-white/80 backdrop-blur-sm border border-gray-300 text-gray-900 h-8 px-2"
+                  onClick={toggleFullscreen}
+                >
+                  {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                </Button>
+              </div>
+
+              {tooltip ? (
+                <div
+                  className="absolute z-20 max-w-[320px] rounded-md border border-gray-300 bg-white/90 px-3 py-2 text-xs text-gray-900 whitespace-pre-wrap shadow-lg"
+                  style={{ left: Math.min(tooltip.x + 8, 300), top: Math.max(tooltip.y - 10, 12) }}
+                >
+                  {tooltip.text}
+                </div>
+              ) : null}
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="lg:col-span-3 space-y-4">
             <div className="bg-card border border-border rounded-lg p-4">
               <div className="flex items-center gap-2 mb-2">
                 <Layers className="w-5 h-5 text-[#0d9488]" />

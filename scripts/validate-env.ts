@@ -48,17 +48,21 @@ async function main() {
     String(process.env.SKIP_ENV_VALIDATE ?? '').trim() !== '1' &&
     String(process.env.ENFORCE_ENV_VALIDATE ?? '').trim() === '1'
 
-  const model = process.env.ANTHROPIC_MODEL || 'claude-3-sonnet-20240229'
+  const model = process.env.ANTHROPIC_MODEL || 'claude-3-sonnet-20241022'
   const key = process.env.ANTHROPIC_API_KEY || ''
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
   const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
   const supabaseService = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  const dbUrl = process.env.DATABASE_URL || ''
+  const directUrl = process.env.DIRECT_URL || ''
 
   if (!looksReal(model)) result.errors.push('ANTHROPIC_MODEL is missing/placeholder')
   if (!looksReal(key)) result.errors.push('ANTHROPIC_API_KEY is missing/placeholder')
   if (!looksReal(supabaseUrl)) result.errors.push('NEXT_PUBLIC_SUPABASE_URL is missing/placeholder')
   if (!looksReal(supabaseAnon)) result.errors.push('NEXT_PUBLIC_SUPABASE_ANON_KEY is missing/placeholder')
   if (!looksReal(supabaseService)) result.errors.push('SUPABASE_SERVICE_ROLE_KEY is missing/placeholder')
+  if (!looksReal(dbUrl)) result.errors.push('DATABASE_URL is missing/placeholder')
+  if (!looksReal(directUrl)) result.errors.push('DIRECT_URL is missing/placeholder')
 
   if (looksReal(model) && looksReal(key)) {
     const a = await testAnthropic(model, key)

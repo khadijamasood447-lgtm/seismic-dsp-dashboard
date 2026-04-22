@@ -18,12 +18,12 @@ export function Navigation({ currentPage, onNavigate, userRole }: NavigationProp
 
   const check = async () => {
     try {
-      const r = await fetch('/api/db/health', { cache: 'no-store' });
+      const r = await fetch('/api/health', { cache: 'no-store' });
       if (!r.ok) {
         setDbConnected(false);
       } else {
         const j = await r.json().catch(() => null);
-        setDbConnected(Boolean(j?.ok && j?.db?.connected));
+        setDbConnected(Boolean(j?.status === 'healthy' || j?.services?.database?.status === 'healthy'));
       }
     } catch {
       setDbConnected(false);
@@ -58,7 +58,7 @@ export function Navigation({ currentPage, onNavigate, userRole }: NavigationProp
 
   const roleItems = [
     { id: 'engineer' as Page, label: 'Engineer Dashboard', icon: UserCog, role: 'engineer' as UserRole },
-    { id: 'authority' as Page, label: 'Authority Dashboard', icon: Shield, role: 'authority' as UserRole },
+    { id: 'authority' as Page, label: 'CDA Dashboard', icon: Shield, role: 'authority' as UserRole },
   ];
 
   return (
