@@ -41,4 +41,5 @@ next-env.d.ts
 **/*.zip
 
 /logs/
+/conversation_logs/
 
