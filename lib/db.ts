@@ -8,13 +8,13 @@ declare global {
 function buildPool() {
   const databaseUrl = process.env.DATABASE_URL
   if (databaseUrl) {
+    // Vercel + Supabase production SSL handling
     const isSupabase = databaseUrl.includes('supabase.co')
-    const isRailway = databaseUrl.includes('rlwy.net')
     const shouldUseSsl =
       process.env.PGSSLMODE === 'require' ||
       process.env.PGSSLMODE === 'verify-ca' ||
       process.env.PGSSLMODE === 'verify-full' ||
-      (process.env.NODE_ENV === 'production' && (isSupabase || isRailway))
+      (process.env.NODE_ENV === 'production' && isSupabase)
 
     try {
       return new Pool({
@@ -26,7 +26,7 @@ function buildPool() {
       })
     } catch (error: any) {
       console.error('Failed to initialize database pool:', error.message)
-      throw new Error(`Database connection initialization failed. Check DATABASE_URL and SSL settings. Error: ${error.message}`)
+      throw new Error(`Database connection initialization failed for Vercel. Check DATABASE_URL and SSL settings. Error: ${error.message}`)
     }
   }
 
