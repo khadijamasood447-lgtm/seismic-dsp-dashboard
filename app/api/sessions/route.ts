@@ -27,7 +27,8 @@ export async function GET(req: Request) {
   } catch (e: any) {
     const msg = String(e?.message ?? 'Failed to list sessions')
     const error_type = /relation .* does not exist|does not exist/i.test(msg) ? 'DATABASE_TABLE_MISSING' : 'DATABASE_QUERY_FAILED'
-    return NextResponse.json({ ok: false, error: msg, error_type }, { status: 500 })
+    console.error('SESSIONS_GET_FAILED', { error_type, message: msg })
+    return NextResponse.json({ ok: false, error: msg, error_type }, { status: 200 })
   }
 }
 
@@ -63,7 +64,8 @@ export async function POST(req: Request) {
   } catch (e: any) {
     const msg = String(e?.message ?? 'Failed to create session')
     const error_type = /relation .* does not exist|does not exist/i.test(msg) ? 'DATABASE_TABLE_MISSING' : 'DATABASE_QUERY_FAILED'
-    return NextResponse.json({ ok: false, error: msg, error_type }, { status: 500 })
+    console.error('SESSIONS_POST_FAILED', { error_type, message: msg })
+    return NextResponse.json({ ok: false, error: msg, error_type }, { status: 200 })
   }
 }
 
@@ -96,7 +98,8 @@ export async function PATCH(req: Request) {
   } catch (e: any) {
     const msg = String(e?.message ?? 'Failed to rename session')
     const error_type = /relation .* does not exist|does not exist/i.test(msg) ? 'DATABASE_TABLE_MISSING' : 'DATABASE_QUERY_FAILED'
-    return NextResponse.json({ ok: false, error: msg, error_type }, { status: 500 })
+    console.error('SESSIONS_PATCH_FAILED', { error_type, message: msg })
+    return NextResponse.json({ ok: false, error: msg, error_type }, { status: 200 })
   }
 }
 
@@ -112,6 +115,7 @@ export async function DELETE(req: Request) {
   } catch (e: any) {
     const msg = String(e?.message ?? 'Failed to delete session')
     const error_type = /relation .* does not exist|does not exist/i.test(msg) ? 'DATABASE_TABLE_MISSING' : 'DATABASE_QUERY_FAILED'
-    return NextResponse.json({ ok: false, error: msg, error_type }, { status: 500 })
+    console.error('SESSIONS_DELETE_FAILED', { error_type, message: msg })
+    return NextResponse.json({ ok: false, error: msg, error_type }, { status: 200 })
   }
 }

@@ -2,11 +2,13 @@ import { NextResponse } from 'next/server'
 
 import { sampleIslamabadGrid } from '@/lib/islamabadGrid'
 import { getPgaForSector, inferSectorFromSiteName, sampleSubbasinTables } from '@/lib/islamabadTables'
+import { queryNearest } from '@/lib/vs-data'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: Request) {
   try {
+    const reqId = `sample_${Date.now()}_${Math.random().toString(16).slice(2)}`
     const { searchParams } = new URL(req.url)
     const lonStr = searchParams.get('lon')
     const latStr = searchParams.get('lat')
@@ -20,11 +22,19 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: 'Invalid lon/lat' }, { status: 400 })
     }
 
+    console.log('SAMPLE_REQUEST', { reqId, lon, lat, has_site: Boolean(site), has_sector: Boolean(sector) })
+
     const sample = await sampleIslamabadGrid(lon, lat)
 
     const inferredSector = sector ?? (site ? inferSectorFromSiteName(site) : null)
     const pga = inferredSector ? getPgaForSector(inferredSector) : null
     const subbasin = sample.inBounds ? sampleSubbasinTables(lon, lat) : null
+
+    const vs_by_depth_m_s: Record<string, number | null> = {}
+    for (let d = 1; d <= 5; d += 1) {
+      const row = queryNearest(lon, lat, d)
+      vs_by_depth_m_s[String(d)] = row?.vs_predicted_m_s ?? null
+    }
 
   const warning =
     'Cyclic triaxial v4 model cannot be applied directly to GIS rasters yet because its feature schema is lab-series derived; add Islamabad cyclic triaxial targets to train a GIS→cyclic surrogate.'
@@ -34,6 +44,7 @@ export async function GET(req: Request) {
       input: { lon, lat },
       sample,
       tables: { sector: inferredSector, pga, subbasin },
+      shallow_vs_by_depth_m_s: vs_by_depth_m_s,
       cyclic: null,
       warning,
     })

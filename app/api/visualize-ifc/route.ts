@@ -21,12 +21,14 @@ function cleanFileName(name: string) {
 }
 
 export async function POST(req: Request) {
+  const reqId = `ifc_${Date.now()}_${Math.random().toString(16).slice(2)}`
+  const startedAt = Date.now()
   const ip = getIp(req)
   if (!rateLimitOk(`viz-ifc:${ip}`, 10, 60_000)) {
     return NextResponse.json({ ok: false, error: 'Rate limit exceeded (10 requests/min). Try again shortly.' }, { status: 429 })
   }
 
-  logger.info('IFC', 'upload_request received', { ip })
+  logger.info('IFC', 'upload_request received', { req_id: reqId, ip })
 
   let fd: FormData
   try {
@@ -44,23 +46,33 @@ export async function POST(req: Request) {
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer())
+  const sizeMb = bytes.byteLength / 1_000_000
   const uploadId = crypto.randomUUID()
   const userId = getUserIdFromHeaders(req)
   const clientId = req.headers.get('x-client-id')?.trim() || null
   const objectPath = `${clientId || userId || 'public'}/${uploadId}_${name}`
-  logger.info('IFC', 'file_received', { file_name: name, bytes: bytes.byteLength, client_id: Boolean(clientId), user_id: Boolean(userId) })
+  logger.info('IFC', 'file_received', {
+    req_id: reqId,
+    file_name: name,
+    bytes: bytes.byteLength,
+    size_mb: Number(sizeMb.toFixed(2)),
+    client_id: Boolean(clientId),
+    user_id: Boolean(userId),
+  })
 
   try {
     const before = await listBucketsSafe()
-    logger.debug('IFC', 'bucket_list', { configured: before.configured, buckets: before.buckets })
+    logger.debug('IFC', 'bucket_list', { req_id: reqId, configured: before.configured, buckets: before.buckets })
     const ensured = await ensureBucketsExist(['ifc_uploads', 'reports', 'models'], { public: false })
-    logger.info('IFC', 'ensure_buckets', { configured: ensured.configured, created: ensured.created, missing: ensured.missing })
+    logger.info('IFC', 'ensure_buckets', { req_id: reqId, configured: ensured.configured, created: ensured.created, missing: ensured.missing })
   } catch (e: any) {
-    logger.error('IFC', 'ensure_buckets failed', e)
+    logger.error('IFC', 'ensure_buckets failed', { req_id: reqId, error: String(e?.message ?? e) })
   }
 
   try {
+    const t0 = Date.now()
     const uploaded = await uploadBufferToBucket('ifc_uploads', objectPath, bytes, 'application/octet-stream')
+    logger.info('IFC', 'upload_complete', { req_id: reqId, ms: Date.now() - t0 })
     if (!uploaded) {
       return NextResponse.json(
         {
@@ -91,7 +103,9 @@ export async function POST(req: Request) {
     )
   }
 
+  const t1 = Date.now()
   const signed = await createSignedDownloadUrl('ifc_uploads', objectPath, 60 * 60 * 24 * 7)
+  logger.info('IFC', 'signed_url_complete', { req_id: reqId, ms: Date.now() - t1 })
   if (!signed) {
     return NextResponse.json(
       {
@@ -104,7 +118,7 @@ export async function POST(req: Request) {
     )
   }
 
-  logger.info('IFC', 'upload_success', { object_path: objectPath })
+  logger.info('IFC', 'upload_success', { req_id: reqId, object_path: objectPath, total_ms: Date.now() - startedAt })
   return NextResponse.json({
     ok: true,
     file_name: name,

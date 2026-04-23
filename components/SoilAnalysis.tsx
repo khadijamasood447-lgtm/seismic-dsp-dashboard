@@ -11,6 +11,7 @@ interface SoilData {
   shearModulus: number;
   liquefactionFactor: number;
   vs30: number;
+  shallowVsByDepth?: Record<string, number | null>;
   pWaveVelocity: number;
   loadingRisk: 'high' | 'medium' | 'low';
   settlementRisk: 'high' | 'medium' | 'low';
@@ -39,6 +40,7 @@ const defaultData: SoilData = {
   shearModulus: 0,
   liquefactionFactor: 0,
   vs30: 0,
+  shallowVsByDepth: {},
   pWaveVelocity: 0,
   loadingRisk: 'low',
   settlementRisk: 'low',
@@ -227,6 +229,7 @@ export function SoilAnalysis() {
             const vsPred = layers.pred_vs_sw ?? null;
             const vpPred = layers.pred_vp_pw ?? null;
             const vs30 = layers.vs30 ?? null;
+            const shallow = json.shallow_vs_by_depth_m_s ?? null;
             const sub = json.tables?.subbasin ?? null;
             const bulkDensity = layers.bulk_density ?? null;
             const waterPct = layers.water_content ?? null;
@@ -243,6 +246,7 @@ export function SoilAnalysis() {
               shearModulus: typeof gMpa === 'number' ? Math.round(gMpa) : 0,
               liquefactionFactor: typeof vsPred === 'number' ? vsPred : 0,
               vs30: typeof vs30 === 'number' ? vs30 : 0,
+              shallowVsByDepth: shallow && typeof shallow === 'object' ? shallow : {},
               pWaveVelocity: typeof vpPred === 'number' ? vpPred : 0,
               loadingRisk: getRiskLevel(typeof waterPct === 'number' ? waterPct : 0),
               settlementRisk: 'low',
@@ -395,6 +399,7 @@ export function SoilAnalysis() {
       const vsPred = layers.pred_vs_sw ?? null;
       const vpPred = layers.pred_vp_pw ?? null;
       const vs30 = layers.vs30 ?? null;
+      const shallow = json.shallow_vs_by_depth_m_s ?? null;
       const sub = json.tables?.subbasin ?? null;
       const bulkDensity = layers.bulk_density ?? null;
       const waterPct = layers.water_content ?? null;
@@ -411,6 +416,7 @@ export function SoilAnalysis() {
         shearModulus: typeof gMpa === 'number' ? Math.round(gMpa) : 0,
         liquefactionFactor: typeof vsPred === 'number' ? vsPred : 0,
         vs30: typeof vs30 === 'number' ? vs30 : 0,
+        shallowVsByDepth: shallow && typeof shallow === 'object' ? shallow : {},
         pWaveVelocity: typeof vpPred === 'number' ? vpPred : 0,
         loadingRisk: getRiskLevel(typeof waterPct === 'number' ? waterPct : 0),
         settlementRisk: 'low',
@@ -572,6 +578,7 @@ export function SoilAnalysis() {
       shearModulus: safeNumber(properties.shear_modulus),
       liquefactionFactor: safeNumber(properties.bender_element_vs),
       vs30: 0,
+      shallowVsByDepth: {},
       pWaveVelocity: 0,
       loadingRisk: getRiskLevel(safeNumber(properties.moisture_content)),
       settlementRisk: getRiskLevel(safeNumber(properties.insitu_density)),
@@ -770,6 +777,21 @@ export function SoilAnalysis() {
                         <div className="text-3xl font-semibold text-gray-900 leading-none">{safeToFixed(data.liquefactionFactor, 0)}</div>
                         <div className="text-xs tracking-wide text-gray-600">Vs (shallow, m/s)</div>
                       </div>
+                    </div>
+                    <div className="mt-1 text-[11px] text-gray-600 text-center">
+                      {data.shallowVsByDepth && Object.keys(data.shallowVsByDepth).length ? (
+                        <span>
+                          1–5m:{" "}
+                          {[1, 2, 3, 4, 5]
+                            .map((d) => {
+                              const v = (data.shallowVsByDepth as any)[String(d)]
+                              return typeof v === "number" ? `${d}m ${v.toFixed(0)}` : `${d}m N/A`
+                            })
+                            .join(" · ")}
+                        </span>
+                      ) : (
+                        <span>1–5m: N/A</span>
+                      )}
                     </div>
                     <div className="relative w-[140px] h-[140px]">
                       <svg className="transform -rotate-90 w-[140px] h-[140px]" viewBox="0 0 80 80">

@@ -224,6 +224,7 @@ export default function ChatbotWidget() {
     const complianceRequested = /\b(analy[sz]e|compliance|check code|is this compliant|bcp|building code)\b/i.test(msg)
     const activeSession = sessionId || (await createSession(msg.slice(0, 60), true))
     setInput("")
+    console.log("CHAT_SEND", { has_text: Boolean(msg), has_ifc: Boolean(ifcFile), session_id: activeSession })
     
     let attachedFile: ChatMsg["attachedFile"] = undefined
     if (ifcFile) {
@@ -247,6 +248,8 @@ export default function ChatbotWidget() {
 
       let attachments: Array<{ type: "ifc"; file_url: string; file_name?: string }> = []
       if (ifcFile) {
+        const uploadStarted = Date.now()
+        console.log("IFC_UPLOAD_START", { name: ifcFile.name, size: ifcFile.size })
         const fd = new FormData()
         fd.append("file", ifcFile)
         const up = await fetch("/api/visualize-ifc", {
@@ -255,6 +258,7 @@ export default function ChatbotWidget() {
           body: fd,
         })
         const upJson = await up.json().catch(() => null)
+        console.log("IFC_UPLOAD_DONE", { ok: up.ok, ms: Date.now() - uploadStarted, error: upJson?.error_code ?? upJson?.error ?? null })
         if (!up.ok || !upJson?.ok || !upJson?.file_url) {
           const err = String(upJson?.error ?? "IFC upload failed")
           setMessages((prev) =>
@@ -304,6 +308,7 @@ export default function ChatbotWidget() {
       // Use the new streaming API
       const ctrl = new AbortController()
       const t = window.setTimeout(() => ctrl.abort(), 30_000)
+      const chatStarted = Date.now()
       const response = await fetch("/api/chat/stream", {
         method: "POST",
         headers: headers(),
@@ -316,6 +321,7 @@ export default function ChatbotWidget() {
         }),
       })
       window.clearTimeout(t)
+      console.log("CHAT_STREAM_OPEN", { ok: response.ok, ms: Date.now() - chatStarted })
 
       if (!response.ok) throw new Error("Stream request failed")
 

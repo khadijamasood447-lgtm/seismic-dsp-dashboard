@@ -6,6 +6,8 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
   try {
+    const reqId = `chat_${Date.now()}_${Math.random().toString(16).slice(2)}`
+    const startedAt = Date.now()
     const userId = getUserIdFromHeaders(req)
     const { message, conversation_id, attachments, context } = await req.json()
 
@@ -19,6 +21,14 @@ export async function POST(req: Request) {
     if (!anthropicKey) {
       return NextResponse.json({ ok: false, error: 'Anthropic API key not configured' }, { status: 500 })
     }
+
+    console.log('CHAT_STREAM_REQUEST', {
+      reqId,
+      has_user_id: Boolean(userId),
+      has_conversation_id: Boolean(conversation_id),
+      msg_chars: String(message).length,
+      attachments: Array.isArray(attachments) ? attachments.length : 0,
+    })
 
     const ifcAttachment =
       Array.isArray(attachments) ? attachments.find((a: any) => a?.type === 'ifc' && typeof a?.file_url === 'string') : null
@@ -154,6 +164,7 @@ export async function POST(req: Request) {
           }
         }
 
+        console.log('CHAT_STREAM_DONE', { reqId, ms: Date.now() - startedAt, chars: fullContent.length })
         controller.close()
       },
     })

@@ -62,8 +62,8 @@ export function HeroSection({ onNavigate, onSelectRole }: HeroSectionProps) {
   const [showImpactTitle, setShowImpactTitle] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
   const [showGraphCaption, setShowGraphCaption] = useState(false);
-  const [soilBackgroundUrl, setSoilBackgroundUrl] = useState('/videos/soilbackground.jpg');
-  const [aboutUsBackgroundUrl, setAboutUsBackgroundUrl] = useState('/videos/aboutus.jpeg');
+  const [soilBackgroundUrl, setSoilBackgroundUrl] = useState('/placeholder.jpg');
+  const [aboutUsBackgroundUrl, setAboutUsBackgroundUrl] = useState('/placeholder.jpg');
   
   // ========== REFS ==========
   const heroSectionRef = useRef<HTMLDivElement>(null);
@@ -105,25 +105,28 @@ export function HeroSection({ onNavigate, onSelectRole }: HeroSectionProps) {
     // Try Supabase first, then fall back to local paths
     if (!supabase) {
       // If no Supabase, use local paths
-      setSoilBackgroundUrl('/videos/soilbackground.jpg');
-      setAboutUsBackgroundUrl('/videos/aboutus.jpeg');
+      setSoilBackgroundUrl('/placeholder.jpg');
+      setAboutUsBackgroundUrl('/placeholder.jpg');
       return;
     }
 
     async function loadAssetUrl(fileName: string, setter: (url: string) => void) {
       try {
-        const { data, error } = await supabase.storage.from('images').getPublicUrl(fileName);
-        if (!error && data?.publicUrl) {
-          setter(data.publicUrl);
-          return;
+        const { data } = await supabase.storage.from('images').getPublicUrl(fileName);
+        const publicUrl = data?.publicUrl;
+        if (publicUrl) {
+          const head = await fetch(publicUrl, { method: 'HEAD' });
+          if (head.ok) {
+            setter(publicUrl);
+            return;
+          }
         }
       } catch (e) {
         // Supabase failed, will use fallback
       }
       
       // Fallback to local path
-      const localPath = `/videos/${fileName}`;
-      setter(localPath);
+      setter('/placeholder.jpg');
     }
 
     loadAssetUrl('soilbackground.jpg', setSoilBackgroundUrl);
@@ -584,7 +587,7 @@ export function HeroSection({ onNavigate, onSelectRole }: HeroSectionProps) {
         <div className="absolute inset-0 w-full h-full z-0">
           <img
             className="absolute inset-0 h-full w-full object-cover"
-            src="/videos/skylineformission.png"
+            src="/placeholder.jpg"
             alt="Seismic dashboard image"
           />
         </div>
@@ -761,7 +764,7 @@ export function HeroSection({ onNavigate, onSelectRole }: HeroSectionProps) {
                 showImpactImage ? 'animate-fade-in-scale' : 'opacity-0 scale-90'
               }`}>
                 <img
-                  src="/videos/impact.png"
+                  src="/placeholder.jpg"
                   alt="Seismic Impact Visualization"
                   className="max-w-full h-auto animate-float"
                   style={{ 
@@ -877,7 +880,7 @@ export function HeroSection({ onNavigate, onSelectRole }: HeroSectionProps) {
             showSkyline ? 'animate-float opacity-100' : 'opacity-0 translate-y-50'
           }`}>
             <img
-              src="/videos/skylineformission.png"
+              src="/placeholder.jpg"
               alt="Skyline mission"
               className="w-full h-auto object-cover "
               style={{ 

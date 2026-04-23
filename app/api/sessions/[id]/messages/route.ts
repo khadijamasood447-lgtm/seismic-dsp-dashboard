@@ -22,6 +22,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   } catch (e: any) {
     const msg = String(e?.message ?? 'Failed to load messages')
     const error_type = /relation .* does not exist|does not exist/i.test(msg) ? 'DATABASE_TABLE_MISSING' : 'DATABASE_QUERY_FAILED'
-    return NextResponse.json({ ok: false, error: msg, error_type }, { status: 500 })
+    console.error('SESSION_MESSAGES_GET_FAILED', { session_id: sessionId, error_type, message: msg })
+    return NextResponse.json({ ok: false, error: msg, error_type }, { status: 200 })
   }
 }
