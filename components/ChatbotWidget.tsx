@@ -251,49 +251,73 @@ export default function ChatbotWidget() {
 
       let attachments: Array<{ type: "ifc"; file_url: string; file_name?: string }> = []
       if (ifcFile) {
+        setLoadingText("Uploading and preparing IFC model...")
         const fd = new FormData()
         fd.append("file", ifcFile)
-        const up = await fetch("/api/visualize-ifc", {
-          method: "POST",
-          headers: { "x-client-id": clientId, ...(getUserIdHeader() ? { "x-user-id": getUserIdHeader()! } : {}) },
-          body: fd,
-        })
-        const upJson = await up.json().catch(() => null)
-        if (up.ok && upJson?.ok && upJson?.file_url) {
-          attachments.push({ type: "ifc", file_url: upJson.file_url, file_name: ifcFile.name })
-          // Update user message with the real URL
-          setMessages(prev => prev.map(m => m.id === userMsg.id ? { ...m, attachedFile: { ...m.attachedFile!, url: upJson.file_url } } : m))
+        
+        // Add 30s timeout for upload
+        const uploadController = new AbortController()
+        const uploadTimeout = setTimeout(() => uploadController.abort(), 30000)
+        
+        try {
+          const up = await fetch("/api/visualize-ifc", {
+            method: "POST",
+            headers: { "x-client-id": clientId, ...(getUserIdHeader() ? { "x-user-id": getUserIdHeader()! } : {}) },
+            body: fd,
+            signal: uploadController.signal
+          })
+          const upJson = await up.json().catch(() => null)
+          if (up.ok && upJson?.ok && upJson?.file_url) {
+            attachments.push({ type: "ifc", file_url: upJson.file_url, file_name: ifcFile.name })
+            setMessages(prev => prev.map(m => m.id === userMsg.id ? { ...m, attachedFile: { ...m.attachedFile!, url: upJson.file_url } } : m))
+          }
+        } finally {
+          clearTimeout(uploadTimeout)
         }
         setIfcFile(null)
       }
 
-      // Use the new streaming API
-      const response = await fetch("/api/chat/stream", {
-        method: "POST",
-        headers: headers(),
-        body: JSON.stringify({
-          message: msg || "Visualize this IFC file",
-          conversation_id: activeSession,
-          attachments,
-          context
-        }),
-      })
+      setLoadingText("Claude is thinking...")
+      
+      // Use a timeout for the streaming API (60 seconds)
+      const streamController = new AbortController()
+      const streamTimeout = setTimeout(() => streamController.abort(), 60000)
 
-      if (!response.ok) throw new Error("Stream request failed")
+      try {
+        const response = await fetch("/api/chat/stream", {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({
+            message: msg || (attachments.length ? "Analyze this IFC model" : ""),
+            conversation_id: activeSession,
+            attachments,
+            context
+          }),
+          signal: streamController.signal
+        })
 
-      const reader = response.body?.getReader()
-      if (!reader) throw new Error("No reader")
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}))
+          throw new Error(errData.error || `Request failed with status ${response.status}`)
+        }
 
-      let fullText = ""
-      const dec = new TextDecoder()
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const chunk = dec.decode(value)
-        fullText += chunk
-        setMessages((prev) => 
-          prev.map((m) => m.id === assistantId ? { ...m, text: fullText } : m)
-        )
+        const reader = response.body?.getReader()
+        if (!reader) throw new Error("No reader available from stream")
+
+        let fullText = ""
+        const dec = new TextDecoder()
+        
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          const chunk = dec.decode(value)
+          fullText += chunk
+          setMessages((prev) => 
+            prev.map((m) => m.id === assistantId ? { ...m, text: fullText } : m)
+          )
+        }
+      } finally {
+        clearTimeout(streamTimeout)
       }
 
       // Check for special instructions in fullText (like triggering visualization)

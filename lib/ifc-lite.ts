@@ -25,59 +25,100 @@ function parseDmsTuple(s: string) {
 
 export function parseIfcLite(text: string): IfcLiteResult {
   const warnings: string[] = []
-  const upper = text.toUpperCase()
+  
+  // Optimization: Only look at the first 2MB for metadata if the file is huge
+  // Most IFC metadata (Site, Building, Storey) is near the beginning
+  const sampleText = text.length > 2_000_000 ? text.slice(0, 2_000_000) : text
+  const upperSample = sampleText.toUpperCase()
 
-  const count = (needle: string) => (upper.match(new RegExp(needle, 'g')) ?? []).length
+  const count = (needle: string) => {
+    let n = 0
+    let pos = 0
+    while (true) {
+      pos = upperSample.indexOf(needle, pos)
+      if (pos === -1) break
+      n++
+      pos += needle.length
+    }
+    return n
+  }
+
   const counts = {
-    columns: count('IFCCOLUMN\\('),
-    beams: count('IFCBEAM\\('),
-    footings: count('IFCFOOTING\\('),
+    columns: count('IFCCOLUMN('),
+    beams: count('IFCBEAM('),
+    footings: count('IFCFOOTING('),
     walls: count('IFCWALL'),
   }
 
   const materialsSet = new Set<string>()
-  for (const m of text.matchAll(/IFCMATERIAL\('([^']+)'/gi)) {
-    if (m[1]) materialsSet.add(String(m[1]))
+  // Use a more restricted search for materials
+  let matPos = 0
+  while (materialsSet.size < 20) {
+    matPos = upperSample.indexOf('IFCMATERIAL(', matPos)
+    if (matPos === -1) break
+    const end = upperSample.indexOf(')', matPos)
+    if (end === -1) break
+    const snippet = sampleText.slice(matPos, end)
+    const m = snippet.match(/'([^']+)'/)
+    if (m?.[1]) materialsSet.add(m[1])
+    matPos = end
   }
-  const materials = Array.from(materialsSet).slice(0, 20)
+  const materials = Array.from(materialsSet)
 
   let location: { lat: number; lon: number } | null = null
-  const siteLine = text.match(/IFCSITE\([\s\S]*?\);/i)?.[0] ?? null
-  if (siteLine) {
-    const tuples = Array.from(siteLine.matchAll(/\((\s*\d+\s*,\s*\d+\s*,\s*\d+(?:\s*,\s*\d+)?\s*)\)/g)).map((m) => m[1])
-    if (tuples.length >= 2) {
-      const latParts = parseDmsTuple(tuples[0])
-      const lonParts = parseDmsTuple(tuples[1])
-      if (latParts && lonParts) {
-        const lat = dmsToDecimal(latParts)
-        const lon = dmsToDecimal(lonParts)
-        if (Number.isFinite(lat) && Number.isFinite(lon)) location = { lat, lon }
+  const siteIdx = upperSample.indexOf('IFCSITE(')
+  if (siteIdx !== -1) {
+    const endIdx = upperSample.indexOf(');', siteIdx)
+    if (endIdx !== -1) {
+      const siteLine = sampleText.slice(siteIdx, endIdx + 2)
+      const tuples = Array.from(siteLine.matchAll(/\((\s*-?\d+\s*,\s*-?\d+\s*,\s*-?\d+(?:\s*,\s*-?\d+)?\s*)\)/g)).map((m) => m[1])
+      if (tuples.length >= 2) {
+        const latParts = parseDmsTuple(tuples[0])
+        const lonParts = parseDmsTuple(tuples[1])
+        if (latParts && lonParts) {
+          const lat = dmsToDecimal(latParts)
+          const lon = dmsToDecimal(lonParts)
+          if (Number.isFinite(lat) && Number.isFinite(lon)) location = { lat, lon }
+        }
       }
     }
   }
 
   if (!location) {
-    warnings.push('IFC site georeferencing not found (IfcSite RefLatitude/RefLongitude). Provide lat/lon manually if needed.')
+    warnings.push('IFC site georeferencing not found in sample. Provide lat/lon manually.')
   }
 
-  const buildingName = text.match(/IFCBUILDING\('([^']+)'/i)?.[1] ?? undefined
-  let height_m: number | null = null
-  const storeyLines = Array.from(text.matchAll(/IFCBUILDINGSTOREY\([\s\S]*?\);/gi)).map((m) => m[0])
-  if (storeyLines.length) {
-    const elevations: number[] = []
-    for (const ln of storeyLines) {
-      const nums = Array.from(ln.matchAll(/(-?\d+(?:\.\d+)?)/g)).map((m) => Number(m[1])).filter((n) => Number.isFinite(n))
-      const last = nums.length ? nums[nums.length - 1] : null
-      if (typeof last === 'number' && Number.isFinite(last)) elevations.push(last)
-    }
-    if (elevations.length >= 2) {
-      const min = Math.min(...elevations)
-      const max = Math.max(...elevations)
-      const h = max - min
-      if (Number.isFinite(h) && h > 0) height_m = h
-    }
+  const buildingIdx = upperSample.indexOf('IFCBUILDING(')
+  let buildingName: string | undefined = undefined
+  if (buildingIdx !== -1) {
+    const endIdx = upperSample.indexOf(');', buildingIdx)
+    const snippet = sampleText.slice(buildingIdx, endIdx !== -1 ? endIdx : buildingIdx + 200)
+    buildingName = snippet.match(/'([^']+)'/)?.[1]
   }
-  if (height_m == null) warnings.push('Building height not found from IfcBuildingStorey elevations; height checks may be incomplete.')
+
+  let height_m: number | null = null
+  const elevations: number[] = []
+  let storeyPos = 0
+  while (elevations.length < 50) {
+    storeyPos = upperSample.indexOf('IFCBUILDINGSTOREY(', storeyPos)
+    if (storeyPos === -1) break
+    const endIdx = upperSample.indexOf(');', storeyPos)
+    if (endIdx === -1) break
+    const ln = sampleText.slice(storeyPos, endIdx + 2)
+    const nums = Array.from(ln.matchAll(/(-?\d+(?:\.\d+)?)/g)).map((m) => Number(m[1])).filter((n) => Number.isFinite(n))
+    const last = nums.length ? nums[nums.length - 1] : null
+    if (typeof last === 'number' && Number.isFinite(last)) elevations.push(last)
+    storeyPos = endIdx
+  }
+
+  if (elevations.length >= 2) {
+    const min = Math.min(...elevations)
+    const max = Math.max(...elevations)
+    const h = max - min
+    if (Number.isFinite(h) && h > 0) height_m = h
+  }
+
+  if (height_m == null) warnings.push('Building height not found in sample.')
 
   return {
     ok: true,
