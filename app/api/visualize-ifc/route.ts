@@ -6,6 +6,7 @@ import { createSignedDownloadUrl, uploadBufferToBucket } from '@/lib/supabase/ap
 import { getUserIdFromHeaders } from '@/lib/supabase/server'
 import { logger } from '@/lib/logger'
 import { ensureBucketsExist, listBucketsSafe } from '@/lib/supabase/storage-utils'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -26,6 +27,46 @@ export async function POST(req: Request) {
   const ip = getIp(req)
   if (!rateLimitOk(`viz-ifc:${ip}`, 10, 60_000)) {
     return NextResponse.json({ ok: false, error: 'Rate limit exceeded (10 requests/min). Try again shortly.' }, { status: 429 })
+  }
+
+  const ct = req.headers.get('content-type') || ''
+  if (ct.includes('application/json')) {
+    const body = await req.json().catch(() => ({} as any))
+    const action = String(body?.action ?? '').trim()
+    const clientId = req.headers.get('x-client-id')?.trim() || null
+    const userId = getUserIdFromHeaders(req)
+
+    if (action === 'create_upload_url') {
+      const fileNameIn = String(body?.file_name ?? 'upload.ifc')
+      const name = cleanFileName(fileNameIn)
+      const uploadId = crypto.randomUUID()
+      const objectPath = `${clientId || userId || 'public'}/${uploadId}_${name}`
+
+      const supabase = createSupabaseServerClient()
+      if (!supabase) {
+        return NextResponse.json(
+          { ok: false, error: 'Supabase server is not configured for signed uploads.' },
+          { status: 500 },
+        )
+      }
+
+      try {
+        const { data, error } = await supabase.storage.from('ifc_uploads').createSignedUploadUrl(objectPath)
+        if (error) throw error
+        logger.info('IFC', 'signed_upload_url_created', { req_id: reqId, object_path: objectPath })
+        return NextResponse.json({ ok: true, object_path: objectPath, upload_url: data?.signedUrl })
+      } catch (e: any) {
+        return NextResponse.json({ ok: false, error: String(e?.message ?? 'Failed to create signed upload URL') }, { status: 500 })
+      }
+    }
+
+    if (action === 'create_download_url') {
+      const objectPath = String(body?.object_path ?? '').trim()
+      if (!objectPath) return NextResponse.json({ ok: false, error: 'Missing object_path' }, { status: 400 })
+      const signed = await createSignedDownloadUrl('ifc_uploads', objectPath, 60 * 60 * 24 * 7)
+      if (!signed) return NextResponse.json({ ok: false, error: 'Failed to create signed download URL' }, { status: 500 })
+      return NextResponse.json({ ok: true, object_path: objectPath, file_url: signed, expires_in_s: 60 * 60 * 24 * 7 })
+    }
   }
 
   logger.info('IFC', 'upload_request received', { req_id: reqId, ip })

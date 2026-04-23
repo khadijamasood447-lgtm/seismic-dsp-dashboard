@@ -2,7 +2,6 @@ import { Button } from './ui/button';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { ChevronDown, User, Mountain, Shield, BarChart3, FileCheck, Upload, FileText } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { supabase } from '@/lib/supabase/client';
 
 // Define the different pages users can navigate to
 type Page = 'home' | 'soil-analysis' | '3d-viz' | 'engineer' | 'authority';
@@ -101,37 +100,6 @@ export function HeroSection({ onNavigate, onSelectRole }: HeroSectionProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    // Try Supabase first, then fall back to local paths
-    if (!supabase) {
-      // If no Supabase, use local paths
-      setSoilBackgroundUrl('/placeholder.jpg');
-      setAboutUsBackgroundUrl('/placeholder.jpg');
-      return;
-    }
-
-    async function loadAssetUrl(fileName: string, setter: (url: string) => void) {
-      try {
-        const { data } = await supabase.storage.from('images').getPublicUrl(fileName);
-        const publicUrl = data?.publicUrl;
-        if (publicUrl) {
-          const head = await fetch(publicUrl, { method: 'HEAD' });
-          if (head.ok) {
-            setter(publicUrl);
-            return;
-          }
-        }
-      } catch (e) {
-        // Supabase failed, will use fallback
-      }
-      
-      // Fallback to local path
-      setter('/placeholder.jpg');
-    }
-
-    loadAssetUrl('soilbackground.jpg', setSoilBackgroundUrl);
-    loadAssetUrl('aboutus.jpeg', setAboutUsBackgroundUrl);
-  }, []);
 
   // Main animation sequence
   useEffect(() => {

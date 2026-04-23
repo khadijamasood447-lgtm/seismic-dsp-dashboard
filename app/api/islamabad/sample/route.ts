@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 
 import { sampleIslamabadGrid } from '@/lib/islamabadGrid'
 import { getPgaForSector, inferSectorFromSiteName, sampleSubbasinTables } from '@/lib/islamabadTables'
-import { queryNearest } from '@/lib/vs-data'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,10 +29,13 @@ export async function GET(req: Request) {
     const pga = inferredSector ? getPgaForSector(inferredSector) : null
     const subbasin = sample.inBounds ? sampleSubbasinTables(lon, lat) : null
 
-    const vs_by_depth_m_s: Record<string, number | null> = {}
-    for (let d = 1; d <= 5; d += 1) {
-      const row = queryNearest(lon, lat, d)
-      vs_by_depth_m_s[String(d)] = row?.vs_predicted_m_s ?? null
+    const shallowVsBase = typeof sample.layers?.pred_vs_sw === 'number' ? sample.layers.pred_vs_sw : null
+    const vs_by_depth_m_s: Record<string, number | null> = {
+      '1': shallowVsBase,
+      '2': shallowVsBase,
+      '3': shallowVsBase,
+      '4': shallowVsBase,
+      '5': shallowVsBase,
     }
 
   const warning =

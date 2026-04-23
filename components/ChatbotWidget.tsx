@@ -250,34 +250,88 @@ export default function ChatbotWidget() {
       if (ifcFile) {
         const uploadStarted = Date.now()
         console.log("IFC_UPLOAD_START", { name: ifcFile.name, size: ifcFile.size })
-        const fd = new FormData()
-        fd.append("file", ifcFile)
-        const up = await fetch("/api/visualize-ifc", {
-          method: "POST",
-          headers: { "x-client-id": clientId, ...(getUserIdHeader() ? { "x-user-id": getUserIdHeader()! } : {}) },
-          body: fd,
-        })
-        const upJson = await up.json().catch(() => null)
-        console.log("IFC_UPLOAD_DONE", { ok: up.ok, ms: Date.now() - uploadStarted, error: upJson?.error_code ?? upJson?.error ?? null })
-        if (!up.ok || !upJson?.ok || !upJson?.file_url) {
-          const err = String(upJson?.error ?? "IFC upload failed")
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, text: `Upload failed: ${err}` } : m)),
-          )
-          setIfcFile(null)
-          setLoading(false)
-          return
+        let fileUrl: string | null = null
+
+        // Vercel limits multipart uploads to API routes; use signed upload for larger files
+        if (ifcFile.size > 4_000_000) {
+          try {
+            const createRes = await fetch("/api/visualize-ifc", {
+              method: "POST",
+              headers: { ...headers(), "content-type": "application/json" },
+              body: JSON.stringify({ action: "create_upload_url", file_name: ifcFile.name }),
+            })
+            const createJson = await createRes.json().catch(() => null)
+            if (!createRes.ok || !createJson?.ok || !createJson?.upload_url || !createJson?.object_path) {
+              throw new Error(String(createJson?.error ?? "Failed to create signed upload URL"))
+            }
+
+            const putRes = await fetch(String(createJson.upload_url), {
+              method: "PUT",
+              body: ifcFile,
+              headers: { "content-type": "application/octet-stream" },
+            })
+            if (!putRes.ok) {
+              throw new Error(`Signed upload failed (${putRes.status})`)
+            }
+
+            const dlRes = await fetch("/api/visualize-ifc", {
+              method: "POST",
+              headers: { ...headers(), "content-type": "application/json" },
+              body: JSON.stringify({ action: "create_download_url", object_path: String(createJson.object_path) }),
+            })
+            const dlJson = await dlRes.json().catch(() => null)
+            if (!dlRes.ok || !dlJson?.ok || !dlJson?.file_url) {
+              throw new Error(String(dlJson?.error ?? "Failed to create signed download URL"))
+            }
+            fileUrl = String(dlJson.file_url)
+          } catch (e: any) {
+            const err = String(e?.message ?? "IFC upload failed")
+            setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, text: `Upload failed: ${err}` } : m)))
+            setIfcFile(null)
+            setLoading(false)
+            return
+          }
+        } else {
+          const fd = new FormData()
+          fd.append("file", ifcFile)
+          const up = await fetch("/api/visualize-ifc", {
+            method: "POST",
+            headers: { "x-client-id": clientId, ...(getUserIdHeader() ? { "x-user-id": getUserIdHeader()! } : {}) },
+            body: fd,
+          })
+          const upJson = await up.json().catch(() => null)
+          console.log("IFC_UPLOAD_DONE", { ok: up.ok, ms: Date.now() - uploadStarted, error: upJson?.error_code ?? upJson?.error ?? null })
+          if (up.status === 413) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? { ...m, text: "Upload failed: IFC is too large for this upload method. Please retry; the app will use a signed upload automatically." }
+                  : m,
+              ),
+            )
+            setIfcFile(null)
+            setLoading(false)
+            return
+          }
+          if (!up.ok || !upJson?.ok || !upJson?.file_url) {
+            const err = String(upJson?.error ?? "IFC upload failed")
+            setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, text: `Upload failed: ${err}` } : m)))
+            setIfcFile(null)
+            setLoading(false)
+            return
+          }
+          fileUrl = String(upJson.file_url)
         }
 
-        attachments.push({ type: "ifc", file_url: upJson.file_url, file_name: ifcFile.name })
+        attachments.push({ type: "ifc", file_url: fileUrl, file_name: ifcFile.name })
 
         try {
-          localStorage.setItem("seismic_ifc_model_url", JSON.stringify({ url: upJson.file_url, file_name: ifcFile.name }))
+          localStorage.setItem("seismic_ifc_model_url", JSON.stringify({ url: fileUrl, file_name: ifcFile.name }))
         } catch {}
 
         window.dispatchEvent(
           new CustomEvent("seismic-ifc-model", {
-            detail: { ok: true, model_url: upJson.file_url, file_name: ifcFile.name },
+            detail: { ok: true, model_url: fileUrl, file_name: ifcFile.name },
           }),
         )
         if (!msg || /\b(visualize|3d|viewer|open)\b/i.test(msg)) {
@@ -286,7 +340,7 @@ export default function ChatbotWidget() {
 
         // Update user message with the real URL
         setMessages((prev) =>
-          prev.map((m) => (m.id === userMsg.id ? { ...m, attachedFile: { ...m.attachedFile!, url: upJson.file_url } } : m)),
+          prev.map((m) => (m.id === userMsg.id ? { ...m, attachedFile: { ...m.attachedFile!, url: fileUrl } } : m)),
         )
 
         setIfcFile(null)
