@@ -14,6 +14,7 @@ interface NavigationProps {
 
 export function Navigation({ currentPage, onNavigate, userRole }: NavigationProps) {
   const [dbConnected, setDbConnected] = useState<boolean | null>(null);
+  const [dbStatus, setDbStatus] = useState<string | null>(null);
   const [sitesOk, setSitesOk] = useState<boolean | null>(null);
 
   const check = async () => {
@@ -21,12 +22,16 @@ export function Navigation({ currentPage, onNavigate, userRole }: NavigationProp
       const r = await fetch('/api/health', { cache: 'no-store' });
       if (!r.ok) {
         setDbConnected(false);
+        setDbStatus('error');
       } else {
         const j = await r.json().catch(() => null);
-        setDbConnected(Boolean(j?.status === 'healthy' || j?.services?.database?.status === 'healthy'));
+        const s = String(j?.services?.database?.status ?? 'unknown');
+        setDbStatus(s);
+        setDbConnected(s === 'healthy');
       }
     } catch {
       setDbConnected(false);
+      setDbStatus('error');
     }
 
     try {
@@ -45,10 +50,10 @@ export function Navigation({ currentPage, onNavigate, userRole }: NavigationProp
 
   const statusLabel = useMemo(() => {
     if (dbConnected === null) return 'Checking backend…';
-    if (!dbConnected) return 'Backend offline (DB)';
+    if (!dbConnected) return dbStatus === 'not_configured' ? 'Backend not configured' : 'Backend offline';
     if (sitesOk === false) return 'Backend online (sites unavailable)';
     return 'Backend online';
-  }, [dbConnected, sitesOk]);
+  }, [dbConnected, sitesOk, dbStatus]);
 
   const navItems = [
     { id: 'home' as Page, label: 'Home', icon: Mountain },
@@ -138,7 +143,9 @@ export function Navigation({ currentPage, onNavigate, userRole }: NavigationProp
         {dbConnected === false && (
           <div className="pb-4">
             <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive-foreground">
-              Database connection is not available. Check your deployment environment variables for `DATABASE_URL` and SSL mode (`PGSSLMODE=require` when needed).
+              {dbStatus === 'not_configured'
+                ? 'Supabase server is not configured. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel environment variables.'
+                : 'Backend is unavailable. Check Vercel Function logs for /api/health and confirm Supabase keys are set.'}
             </div>
           </div>
         )}

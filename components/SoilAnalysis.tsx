@@ -10,6 +10,7 @@ interface SoilData {
   location: string;
   shearModulus: number;
   liquefactionFactor: number;
+  vs30: number;
   pWaveVelocity: number;
   loadingRisk: 'high' | 'medium' | 'low';
   settlementRisk: 'high' | 'medium' | 'low';
@@ -37,6 +38,7 @@ const defaultData: SoilData = {
   location: 'Select a site from the map',
   shearModulus: 0,
   liquefactionFactor: 0,
+  vs30: 0,
   pWaveVelocity: 0,
   loadingRisk: 'low',
   settlementRisk: 'low',
@@ -224,6 +226,7 @@ export function SoilAnalysis() {
             const layers = json.sample?.layers ?? {};
             const vsPred = layers.pred_vs_sw ?? null;
             const vpPred = layers.pred_vp_pw ?? null;
+            const vs30 = layers.vs30 ?? null;
             const sub = json.tables?.subbasin ?? null;
             const bulkDensity = layers.bulk_density ?? null;
             const waterPct = layers.water_content ?? null;
@@ -239,6 +242,7 @@ export function SoilAnalysis() {
               location: `Lon ${lon.toFixed(4)}, Lat ${lat.toFixed(4)}`,
               shearModulus: typeof gMpa === 'number' ? Math.round(gMpa) : 0,
               liquefactionFactor: typeof vsPred === 'number' ? vsPred : 0,
+              vs30: typeof vs30 === 'number' ? vs30 : 0,
               pWaveVelocity: typeof vpPred === 'number' ? vpPred : 0,
               loadingRisk: getRiskLevel(typeof waterPct === 'number' ? waterPct : 0),
               settlementRisk: 'low',
@@ -390,6 +394,7 @@ export function SoilAnalysis() {
       const layers = json.sample?.layers ?? {};
       const vsPred = layers.pred_vs_sw ?? null;
       const vpPred = layers.pred_vp_pw ?? null;
+      const vs30 = layers.vs30 ?? null;
       const sub = json.tables?.subbasin ?? null;
       const bulkDensity = layers.bulk_density ?? null;
       const waterPct = layers.water_content ?? null;
@@ -405,6 +410,7 @@ export function SoilAnalysis() {
         location: `Lon ${lon.toFixed(4)}, Lat ${lat.toFixed(4)}`,
         shearModulus: typeof gMpa === 'number' ? Math.round(gMpa) : 0,
         liquefactionFactor: typeof vsPred === 'number' ? vsPred : 0,
+        vs30: typeof vs30 === 'number' ? vs30 : 0,
         pWaveVelocity: typeof vpPred === 'number' ? vpPred : 0,
         loadingRisk: getRiskLevel(typeof waterPct === 'number' ? waterPct : 0),
         settlementRisk: 'low',
@@ -565,6 +571,7 @@ export function SoilAnalysis() {
       location: properties.site,
       shearModulus: safeNumber(properties.shear_modulus),
       liquefactionFactor: safeNumber(properties.bender_element_vs),
+      vs30: 0,
       pWaveVelocity: 0,
       loadingRisk: getRiskLevel(safeNumber(properties.moisture_content)),
       settlementRisk: getRiskLevel(safeNumber(properties.insitu_density)),
@@ -761,7 +768,7 @@ export function SoilAnalysis() {
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
                         <div className="text-3xl font-semibold text-gray-900 leading-none">{safeToFixed(data.liquefactionFactor, 0)}</div>
-                        <div className="text-xs tracking-wide text-gray-600">Vs (m/s)</div>
+                        <div className="text-xs tracking-wide text-gray-600">Vs (shallow, m/s)</div>
                       </div>
                     </div>
                     <div className="relative w-[140px] h-[140px]">
@@ -792,11 +799,12 @@ export function SoilAnalysis() {
             {/* Row 2: Soil Profile Properties */}
             <div className="bg-gray-50 border border-gray-300 rounded-lg p-3 flex-1 min-h-0">
               <h3 className="text-base uppercase tracking-wider text-[#0d9488] mb-2">Soil Profile Properties</h3>
-              <div className="grid grid-cols-2 grid-rows-3 gap-3 auto-rows-fr h-full">
+              <div className="grid grid-cols-2 gap-3 auto-rows-fr h-full">
                 {[
                   { label: 'Soil Type', value: data.soilType },
                   { label: 'Bulk Density', value: data.dryDensity },
                   { label: 'Moisture', value: data.moisture },
+                  { label: 'Vs30', value: data.vs30 ? `${safeToFixed(data.vs30, 0)} m/s` : 'N/A' },
                   { label: '% Sand', value: data.sandContent },
                   { label: '% Silt', value: data.siltContent },
                   { label: '% Clay', value: data.clayContent },
@@ -821,7 +829,7 @@ export function SoilAnalysis() {
             {/* Map Instructions */}
             {!hasSelection && (
               <div className="absolute top-3 left-3 z-10 bg-white/90 backdrop-blur-sm text-gray-900 text-xs px-3 py-2 rounded border border-gray-300">
-                Click any location within the AOI rectangle to sample grid values
+                Click any location within the AOI boundary to sample grid values
               </div>
             )}
 
@@ -927,7 +935,7 @@ export function SoilAnalysis() {
                               liquefactionRisk: data.loadingRisk,
                             },
                           ],
-                          vs30: safeNumber(data.liquefactionFactor),
+                          vs30: safeNumber(data.vs30),
                           siteClass: 'D',
                         }
                       : null

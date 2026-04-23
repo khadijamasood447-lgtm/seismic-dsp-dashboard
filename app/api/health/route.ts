@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server'
-import { getDbPool } from '@/lib/db'
 import { createClient } from '@supabase/supabase-js'
+import { createSupabaseServerClient, isSupabaseServerConfigured } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
-
-const pool = getDbPool()
 
 export async function GET() {
   const results: any = {
@@ -17,19 +15,26 @@ export async function GET() {
     },
   }
 
-  // 1. Check Database
+  // 1. Check Supabase Database (no DATABASE_URL required)
   try {
-    const dbCheck = await pool.query('SELECT 1 as ok')
-    if (dbCheck.rows?.[0]?.ok === 1) {
-      results.services.database.status = 'healthy'
-    } else {
-      results.services.database.status = 'unhealthy'
+    if (!isSupabaseServerConfigured()) {
+      results.services.database.status = 'not_configured'
       results.status = 'degraded'
+    } else {
+      const supabase = createSupabaseServerClient()
+      if (!supabase) {
+        results.services.database.status = 'not_configured'
+        results.status = 'degraded'
+      } else {
+        const { error } = await supabase.from('chat_sessions').select('id').limit(1)
+        if (error) throw error
+        results.services.database.status = 'healthy'
+      }
     }
   } catch (e: any) {
     results.services.database.status = 'error'
     results.services.database.error = e.message
-    results.status = 'unhealthy'
+    results.status = 'degraded'
   }
 
   // 2. Check Supabase Storage

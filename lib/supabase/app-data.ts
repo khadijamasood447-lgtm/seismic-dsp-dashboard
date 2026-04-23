@@ -14,6 +14,7 @@ type MessageInsert = {
   content: string
   tool_calls?: any
   citations?: any
+  metadata?: any
 }
 
 function sb() {
@@ -92,6 +93,7 @@ export async function insertChatMessage(input: MessageInsert) {
       content: input.content,
       tool_calls: input.tool_calls ?? null,
       citations: input.citations ?? null,
+      metadata: input.metadata ?? null,
     })
     .select('*')
     .single()
@@ -119,6 +121,7 @@ export async function listChatMessages(sessionId: string, opts: { user_id?: stri
     content: x.content,
     tool_calls: x.tool_calls,
     citations: x.citations,
+    metadata: x.metadata,
     created_at: x.created_at,
   }))
 }
@@ -251,4 +254,3 @@ export async function createSignedDownloadUrl(bucket: string, filePath: string, 
   if (error) throw error
   return data?.signedUrl ?? null
 }
-

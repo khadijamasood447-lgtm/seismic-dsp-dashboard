@@ -79,11 +79,7 @@ function getUserIdHeader() {
 const introMessage = (): ChatMsg => ({
   id: uid(),
   role: "assistant",
-  text:
-    "Ask me about Vs predictions, uncertainty, soil properties, methodology, limitations, or BCP-SP 2021 screening checks. Examples:\n" +
-    '- "Vs at (33.71, 73.08) at 2m"\n' +
-    '- "Compare G-6 and I-8 at 2m"\n' +
-    '- "What does Vs=250 m/s mean for foundations?"',
+  text: "How can I help you?",
 })
 
 export default function ChatbotWidget() {
@@ -251,73 +247,91 @@ export default function ChatbotWidget() {
 
       let attachments: Array<{ type: "ifc"; file_url: string; file_name?: string }> = []
       if (ifcFile) {
-        setLoadingText("Uploading and preparing IFC model...")
         const fd = new FormData()
         fd.append("file", ifcFile)
-        
-        // Add 30s timeout for upload
-        const uploadController = new AbortController()
-        const uploadTimeout = setTimeout(() => uploadController.abort(), 30000)
-        
-        try {
-          const up = await fetch("/api/visualize-ifc", {
-            method: "POST",
-            headers: { "x-client-id": clientId, ...(getUserIdHeader() ? { "x-user-id": getUserIdHeader()! } : {}) },
-            body: fd,
-            signal: uploadController.signal
-          })
-          const upJson = await up.json().catch(() => null)
-          if (up.ok && upJson?.ok && upJson?.file_url) {
-            attachments.push({ type: "ifc", file_url: upJson.file_url, file_name: ifcFile.name })
-            setMessages(prev => prev.map(m => m.id === userMsg.id ? { ...m, attachedFile: { ...m.attachedFile!, url: upJson.file_url } } : m))
-          }
-        } finally {
-          clearTimeout(uploadTimeout)
+        const up = await fetch("/api/visualize-ifc", {
+          method: "POST",
+          headers: { "x-client-id": clientId, ...(getUserIdHeader() ? { "x-user-id": getUserIdHeader()! } : {}) },
+          body: fd,
+        })
+        const upJson = await up.json().catch(() => null)
+        if (!up.ok || !upJson?.ok || !upJson?.file_url) {
+          const err = String(upJson?.error ?? "IFC upload failed")
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantId ? { ...m, text: `Upload failed: ${err}` } : m)),
+          )
+          setIfcFile(null)
+          setLoading(false)
+          return
         }
+
+        attachments.push({ type: "ifc", file_url: upJson.file_url, file_name: ifcFile.name })
+
+        try {
+          localStorage.setItem("seismic_ifc_model_url", JSON.stringify({ url: upJson.file_url, file_name: ifcFile.name }))
+        } catch {}
+
+        window.dispatchEvent(
+          new CustomEvent("seismic-ifc-model", {
+            detail: { ok: true, model_url: upJson.file_url, file_name: ifcFile.name },
+          }),
+        )
+        if (!msg || /\b(visualize|3d|viewer|open)\b/i.test(msg)) {
+          window.dispatchEvent(new CustomEvent("seismic-navigate", { detail: { page: "3d-viz" } }))
+        }
+
+        // Update user message with the real URL
+        setMessages((prev) =>
+          prev.map((m) => (m.id === userMsg.id ? { ...m, attachedFile: { ...m.attachedFile!, url: upJson.file_url } } : m)),
+        )
+
         setIfcFile(null)
+
+        if (!msg) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? { ...m, text: "IFC received. Opening the 3D Visualizer now." }
+                : m,
+            ),
+          )
+          setLoading(false)
+          refreshSessions()
+          return
+        }
       }
 
-      setLoadingText("Claude is thinking...")
-      
-      // Use a timeout for the streaming API (60 seconds)
-      const streamController = new AbortController()
-      const streamTimeout = setTimeout(() => streamController.abort(), 60000)
+      // Use the new streaming API
+      const ctrl = new AbortController()
+      const t = window.setTimeout(() => ctrl.abort(), 30_000)
+      const response = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: headers(),
+        signal: ctrl.signal,
+        body: JSON.stringify({
+          message: msg || "Visualize this IFC file",
+          conversation_id: activeSession,
+          attachments,
+          context
+        }),
+      })
+      window.clearTimeout(t)
 
-      try {
-        const response = await fetch("/api/chat/stream", {
-          method: "POST",
-          headers: headers(),
-          body: JSON.stringify({
-            message: msg || (attachments.length ? "Analyze this IFC model" : ""),
-            conversation_id: activeSession,
-            attachments,
-            context
-          }),
-          signal: streamController.signal
-        })
+      if (!response.ok) throw new Error("Stream request failed")
 
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}))
-          throw new Error(errData.error || `Request failed with status ${response.status}`)
-        }
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error("No reader")
 
-        const reader = response.body?.getReader()
-        if (!reader) throw new Error("No reader available from stream")
-
-        let fullText = ""
-        const dec = new TextDecoder()
-        
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          const chunk = dec.decode(value)
-          fullText += chunk
-          setMessages((prev) => 
-            prev.map((m) => m.id === assistantId ? { ...m, text: fullText } : m)
-          )
-        }
-      } finally {
-        clearTimeout(streamTimeout)
+      let fullText = ""
+      const dec = new TextDecoder()
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = dec.decode(value)
+        fullText += chunk
+        setMessages((prev) => 
+          prev.map((m) => m.id === assistantId ? { ...m, text: fullText } : m)
+        )
       }
 
       // Check for special instructions in fullText (like triggering visualization)
@@ -427,20 +441,20 @@ export default function ChatbotWidget() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="group fixed right-0 top-1/2 -translate-y-1/2 z-[60] rounded-l-xl bg-white text-gray-900 border border-gray-300 px-2 py-3 shadow-[0_0_22px_rgba(0,0,0,0.15)] hover:shadow-[0_0_40px_rgba(0,0,0,0.25)] transition transform hover:scale-[1.06]"
+        className="group fixed right-0 top-1/2 -translate-y-1/2 z-[60] rounded-l-2xl bg-[#0d9488] text-white border border-[#0d9488]/60 px-3 py-5 shadow-[0_0_28px_rgba(13,148,136,0.35)] hover:shadow-[0_0_44px_rgba(13,148,136,0.55)] transition transform hover:scale-[1.08]"
         aria-label="Open chat"
       >
         <span className="flex flex-col items-center gap-2">
-          <span className="h-6 w-6 rounded-full bg-gray-200 border border-gray-400 flex items-center justify-center text-xs font-bold drop-shadow-[0_0_10px_rgba(0,0,0,0.1)]">
+          <span className="h-8 w-8 rounded-full bg-white/15 border border-white/30 flex items-center justify-center text-sm font-bold">
             G
           </span>
           <span
-            className="text-[11px] font-semibold uppercase tracking-[0.30em] drop-shadow-[0_0_14px_rgba(0,0,0,0.1)]"
+            className="text-[12px] font-semibold uppercase tracking-[0.32em]"
             style={{ writingMode: "vertical-rl", textOrientation: "mixed" } as any}
           >
             ASK AI
           </span>
-          <span className="text-gray-900/90 opacity-0 group-hover:opacity-100 transition drop-shadow-[0_0_12px_rgba(0,0,0,0.1)] group-hover:animate-bounce">
+          <span className="text-white/90 opacity-0 group-hover:opacity-100 transition group-hover:animate-bounce">
             ←
           </span>
         </span>
@@ -464,7 +478,7 @@ export default function ChatbotWidget() {
             <div className="flex-1 flex flex-col">
               <div className="px-4 py-3 border-b border-gray-300 flex items-center justify-between">
                 <div>
-                  <div className="font-semibold text-gray-900 tracking-wide">Vs Assistant</div>
+                  <div className="font-semibold text-gray-900 tracking-wide">AI Assistant</div>
                   <div className="text-xs text-gray-600 tracking-wide">{contextLabel}</div>
                   {llmStatus ? (
                     <div className="text-[11px] text-gray-500 tracking-wide">
