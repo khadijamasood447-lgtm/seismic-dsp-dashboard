@@ -6,8 +6,8 @@ import { getPgaForSector, inferSectorFromSiteName, sampleSubbasinTables } from '
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: Request) {
+  const reqId = `sample_${Date.now()}_${Math.random().toString(16).slice(2)}`
   try {
-    const reqId = `sample_${Date.now()}_${Math.random().toString(16).slice(2)}`
     const { searchParams } = new URL(req.url)
     const lonStr = searchParams.get('lon')
     const latStr = searchParams.get('lat')
@@ -33,9 +33,6 @@ export async function GET(req: Request) {
     const vs_by_depth_m_s: Record<string, number | null> = {
       '1': shallowVsBase,
       '2': shallowVsBase,
-      '3': shallowVsBase,
-      '4': shallowVsBase,
-      '5': shallowVsBase,
     }
 
   const warning =
@@ -51,7 +48,37 @@ export async function GET(req: Request) {
       warning,
     })
   } catch (e: any) {
-    console.error('sample error', e)
-    return NextResponse.json({ ok: false, error: 'Sampling failed' }, { status: 500 })
+    const errObj =
+      e instanceof Error
+        ? { name: e.name, message: e.message, stack: e.stack }
+        : { name: typeof e, message: String(e), stack: undefined as string | undefined }
+
+    console.error('ISLAMABAD_SAMPLE_ERROR', {
+      reqId,
+      url: req.url,
+      ...errObj,
+      raw: e,
+    })
+
+    const { searchParams } = new URL(req.url)
+    const debug = searchParams.get('debug') === '1'
+
+    return NextResponse.json(
+      {
+        ok: false,
+        error: 'Sampling failed',
+        reqId,
+        ...(debug
+          ? {
+              debug: {
+                name: errObj.name,
+                message: errObj.message,
+                stack: errObj.stack,
+              },
+            }
+          : {}),
+      },
+      { status: 500 },
+    )
   }
 }

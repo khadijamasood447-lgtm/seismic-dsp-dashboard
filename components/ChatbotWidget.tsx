@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import SessionHistory from "@/components/SessionHistory"
 import { appendLocalMessage, loadLocalMessages, loadLocalSessions, saveLocalSessions } from "@/lib/localStorageSync"
+import type { IfcExtractedChatData } from "@/lib/ifc/extractIfcForChat"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
@@ -88,6 +89,13 @@ export default function ChatbotWidget() {
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [input, setInput] = useState("")
   const [ifcFile, setIfcFile] = useState<File | null>(null)
+  const [ifcExtractedData, setIfcExtractedData] = useState<IfcExtractedChatData | null>(null)
+  const [ifcExtractBusy, setIfcExtractBusy] = useState(false)
+  const [ifcExtractError, setIfcExtractError] = useState<string | null>(null)
+  const [ifcExtractSource, setIfcExtractSource] = useState<string | null>(null)
+  const [publicIfcUrl, setPublicIfcUrl] = useState("")
+  const [publicIfcUrlBusy, setPublicIfcUrlBusy] = useState(false)
+  const [publicIfcUrlError, setPublicIfcUrlError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadingText, setLoadingText] = useState("Claude is thinking...")
   const [diagBusy, setDiagBusy] = useState(false)
@@ -97,6 +105,7 @@ export default function ChatbotWidget() {
   const [sessionId, setSessionId] = useState<string>(() => getActiveSessionId() || uid())
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
+  const localIfcObjectUrlRef = useRef<string | null>(null)
 
   const headers = useCallback(() => {
     const h: Record<string, string> = {
@@ -217,9 +226,98 @@ export default function ChatbotWidget() {
     if (sessionId) loadSession(sessionId)
   }, [open, sessionId, loadSession, refreshSessions])
 
+  const setViewerIfc = useCallback((url: string, fileName: string, navigate = true) => {
+    try {
+      localStorage.setItem("seismic_ifc_model_url", JSON.stringify({ url, file_name: fileName }))
+    } catch {}
+    window.dispatchEvent(new CustomEvent("seismic-ifc-model", { detail: { ok: true, model_url: url, file_name: fileName } }))
+    if (navigate) window.dispatchEvent(new CustomEvent("seismic-navigate", { detail: { page: "3d-viz" } }))
+  }, [])
+
+  const extractIfcInBrowser = useCallback(
+    async (args: { buffer: ArrayBuffer; file_name?: string; source_url?: string; source_key: string }) => {
+      if (ifcExtractBusy && ifcExtractSource === args.source_key) return
+      setIfcExtractBusy(true)
+      setIfcExtractError(null)
+      setIfcExtractSource(args.source_key)
+      try {
+        const mod = await import("@/lib/ifc/extractIfcForChat")
+        const extracted = await mod.extractIfcForChat({ buffer: args.buffer, file_name: args.file_name, source_url: args.source_url })
+        setIfcExtractedData(extracted)
+      } catch (e: any) {
+        setIfcExtractedData(null)
+        setIfcExtractError(String(e?.message ?? "IFC extraction failed"))
+      } finally {
+        setIfcExtractBusy(false)
+      }
+    },
+    [ifcExtractBusy, ifcExtractSource],
+  )
+
+  type PublicIfcUrlValidation = { ok: true; url: string } | { ok: false; error: string }
+
+  const validatePublicIfcUrl = useCallback(
+    async (rawUrl: string): Promise<PublicIfcUrlValidation> => {
+      const trimmed = rawUrl.trim()
+      setPublicIfcUrlError(null)
+      if (!trimmed) return { ok: false, error: "Please paste a public IFC URL." }
+
+      let urlObj: URL
+      try {
+        urlObj = new URL(trimmed)
+      } catch {
+        const error = "Invalid URL."
+        setPublicIfcUrlError(error)
+        return { ok: false, error }
+      }
+      if (urlObj.protocol !== "https:" && urlObj.protocol !== "http:") {
+        const error = "URL must start with http:// or https://"
+        setPublicIfcUrlError(error)
+        return { ok: false, error }
+      }
+      const pathname = urlObj.pathname.toLowerCase()
+
+      setPublicIfcUrlBusy(true)
+      try {
+        const head = await fetch(trimmed, { method: "HEAD" })
+        if (!head.ok) throw new Error(`URL not reachable (${head.status})`)
+        const ct = (head.headers.get("content-type") || "").toLowerCase()
+        const cd = (head.headers.get("content-disposition") || "").toLowerCase()
+        if (ct.includes("text/html")) throw new Error("URL appears to return HTML, not a raw IFC file.")
+
+        const looksLikeIfc =
+          pathname.endsWith(".ifc") || cd.includes(".ifc") || ct.includes("model/ifc") || ct.includes("application/octet-stream")
+        if (!looksLikeIfc) throw new Error("URL must directly serve an .ifc file (end with .ifc or return raw file headers).")
+
+        return { ok: true, url: trimmed }
+      } catch {
+        try {
+          const get = await fetch(trimmed, { method: "GET", headers: { Range: "bytes=0-0" } })
+          if (!(get.ok || get.status === 206)) throw new Error(`URL not reachable (${get.status})`)
+          const ct = (get.headers.get("content-type") || "").toLowerCase()
+          const cd = (get.headers.get("content-disposition") || "").toLowerCase()
+          if (ct.includes("text/html")) throw new Error("URL appears to return HTML, not a raw IFC file.")
+
+          const looksLikeIfc =
+            pathname.endsWith(".ifc") || cd.includes(".ifc") || ct.includes("model/ifc") || ct.includes("application/octet-stream")
+          if (!looksLikeIfc) throw new Error("URL must directly serve an .ifc file (end with .ifc or return raw file headers).")
+
+          return { ok: true, url: trimmed }
+        } catch (e2: any) {
+          const error = String(e2?.message ?? "URL validation failed. Ensure CORS allows access.")
+          setPublicIfcUrlError(error)
+          return { ok: false, error }
+        }
+      } finally {
+        setPublicIfcUrlBusy(false)
+      }
+    },
+    [],
+  )
+
   const send = async () => {
     const msg = input.trim()
-    if ((!msg && !ifcFile) || loading) return
+    if ((!msg && !ifcFile && !publicIfcUrl.trim()) || loading) return
     
     const complianceRequested = /\b(analy[sz]e|compliance|check code|is this compliant|bcp|building code)\b/i.test(msg)
     const activeSession = sessionId || (await createSession(msg.slice(0, 60), true))
@@ -230,11 +328,15 @@ export default function ChatbotWidget() {
     if (ifcFile) {
       attachedFile = { name: ifcFile.name, type: "IFC Model", url: "" }
     }
+    if (!attachedFile && publicIfcUrl.trim()) {
+      const name = publicIfcUrl.trim().split("/").pop() || "model.ifc"
+      attachedFile = { name, type: "IFC URL", url: publicIfcUrl.trim() }
+    }
 
     const userMsg: ChatMsg = { 
       id: uid(), 
       role: "user", 
-      text: msg || (ifcFile ? "Analyzing uploaded IFC model..." : ""),
+      text: msg || (ifcFile ? "Analyzing uploaded IFC model..." : publicIfcUrl.trim() ? "Visualizing IFC from URL..." : ""),
       attachedFile
     }
     setMessages((m) => [...m, userMsg])
@@ -248,6 +350,35 @@ export default function ChatbotWidget() {
 
       let attachments: Array<{ type: "ifc"; file_url: string; file_name?: string }> = []
       if (ifcFile) {
+        const MAX_SUPABASE_BYTES = 50_000_000
+        if (ifcFile.size > MAX_SUPABASE_BYTES) {
+          const fileUrl = (() => {
+            if (localIfcObjectUrlRef.current) return localIfcObjectUrlRef.current
+            const u = URL.createObjectURL(ifcFile)
+            localIfcObjectUrlRef.current = u
+            return u
+          })()
+          setViewerIfc(fileUrl, ifcFile.name, !msg || /\b(visualize|3d|viewer|open)\b/i.test(msg))
+          if (!ifcExtractedData || ifcExtractSource !== `file:${ifcFile.name}:${ifcFile.size}`) {
+            const buf = await ifcFile.arrayBuffer()
+            await extractIfcInBrowser({ buffer: buf, file_name: ifcFile.name, source_url: undefined, source_key: `file:${ifcFile.name}:${ifcFile.size}` })
+          }
+
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? {
+                    ...m,
+                    text:
+                      "Your IFC file is larger than 50 MB, so it will not be uploaded to Supabase.\n\nIt is loaded locally in your browser for 3D visualization. You can also paste a public IFC URL (direct raw link) to share a model.",
+                  }
+                : m,
+            ),
+          )
+          setLoading(false)
+          return
+        }
+
         const uploadStarted = Date.now()
         console.log("IFC_UPLOAD_START", { name: ifcFile.name, size: ifcFile.size })
         let fileUrl: string | null = null
@@ -359,6 +490,39 @@ export default function ChatbotWidget() {
         }
       }
 
+      if (!ifcFile && publicIfcUrl.trim()) {
+        const result = await validatePublicIfcUrl(publicIfcUrl)
+        if (!result.ok) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId ? { ...m, text: `URL invalid: ${result.error}` } : m,
+            ),
+          )
+          setLoading(false)
+          return
+        }
+
+        const validated = result.url
+        const fileName = validated.split("/").pop() || "model.ifc"
+        attachments.push({ type: "ifc", file_url: validated, file_name: fileName })
+        setMessages((prev) =>
+          prev.map((m) => (m.id === userMsg.id ? { ...m, attachedFile: { name: fileName, type: "IFC URL", url: validated } } : m)),
+        )
+        setViewerIfc(validated, fileName, true)
+        if (!ifcExtractedData || ifcExtractSource !== `url:${validated}`) {
+          const buf = await fetch(validated).then((r) => r.arrayBuffer())
+          await extractIfcInBrowser({ buffer: buf, file_name: fileName, source_url: validated, source_key: `url:${validated}` })
+        }
+        setPublicIfcUrl("")
+
+        if (!msg) {
+          setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, text: "IFC URL received. Opening the 3D Visualizer now." } : m)))
+          setLoading(false)
+          refreshSessions()
+          return
+        }
+      }
+
       // Use the new streaming API
       const ctrl = new AbortController()
       const t = window.setTimeout(() => ctrl.abort(), 30_000)
@@ -371,6 +535,7 @@ export default function ChatbotWidget() {
           message: msg || "Visualize this IFC file",
           conversation_id: activeSession,
           attachments,
+          ifc_extracted_data: ifcExtractedData ?? undefined,
           context
         }),
       })
@@ -696,7 +861,53 @@ export default function ChatbotWidget() {
                       className="hidden"
                       onChange={(e) => {
                         const f = e.target.files?.[0] ?? null
+                        if (!f) {
+                          setIfcFile(null)
+                          return
+                        }
+                        const MAX_SUPABASE_BYTES = 50_000_000
+                        if (f.size > MAX_SUPABASE_BYTES) {
+                          setIfcFile(f)
+                          if (localIfcObjectUrlRef.current) {
+                            try {
+                              URL.revokeObjectURL(localIfcObjectUrlRef.current)
+                            } catch {}
+                            localIfcObjectUrlRef.current = null
+                          }
+                          const u = URL.createObjectURL(f)
+                          localIfcObjectUrlRef.current = u
+                          setPublicIfcUrlError(null)
+                          setIfcExtractedData(null)
+                          setIfcExtractError(null)
+                          setIfcExtractSource(null)
+                          setViewerIfc(u, f.name, true)
+                          f.arrayBuffer()
+                            .then((buf) => extractIfcInBrowser({ buffer: buf, file_name: f.name, source_url: undefined, source_key: `file:${f.name}:${f.size}` }))
+                            .catch(() => {})
+                          setMessages((m) => [
+                            ...m,
+                            {
+                              id: uid(),
+                              role: "assistant",
+                              text:
+                                "Your IFC file is larger than 50 MB, so it will not be uploaded to Supabase.\n\nIt has been loaded locally in your browser for 3D visualization. You can also paste a public IFC URL (direct raw .ifc link) below.",
+                            },
+                          ])
+                          return
+                        }
                         setIfcFile(f)
+                        setIfcExtractedData(null)
+                        setIfcExtractError(null)
+                        setIfcExtractSource(null)
+                        if (localIfcObjectUrlRef.current) {
+                          try {
+                            URL.revokeObjectURL(localIfcObjectUrlRef.current)
+                          } catch {}
+                          localIfcObjectUrlRef.current = null
+                        }
+                        f.arrayBuffer()
+                          .then((buf) => extractIfcInBrowser({ buffer: buf, file_name: f.name, source_url: undefined, source_key: `file:${f.name}:${f.size}` }))
+                          .catch(() => {})
                       }}
                       disabled={loading}
                     />
@@ -712,7 +923,7 @@ export default function ChatbotWidget() {
                       }
                     }}
                     className="flex-1 rounded-md border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#0d9488]/40"
-                    placeholder='Ask e.g. "Vs at 2m in G-6"'
+                    placeholder="How can I help you?"
                   />
                   <button
                     onClick={send}
@@ -722,6 +933,46 @@ export default function ChatbotWidget() {
                     Send
                   </button>
                 </div>
+                <div className="mt-2 flex gap-2 items-center">
+                  <input
+                    value={publicIfcUrl}
+                    onChange={(e) => {
+                      setPublicIfcUrl(e.target.value)
+                      if (publicIfcUrlError) setPublicIfcUrlError(null)
+                    }}
+                    onBlur={async () => {
+                      if (!publicIfcUrl.trim()) return
+                      await validatePublicIfcUrl(publicIfcUrl)
+                    }}
+                    className="flex-1 rounded-md border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#0d9488]/40"
+                    placeholder="Public IFC URL (direct .ifc link)"
+                    disabled={loading || publicIfcUrlBusy}
+                  />
+                  <button
+                    onClick={async () => {
+                      const result = await validatePublicIfcUrl(publicIfcUrl)
+                      if (!result.ok) return
+                      const validated = result.url
+                      const fileName = validated.split("/").pop() || "model.ifc"
+                      setViewerIfc(validated, fileName, true)
+                      setIfcExtractedData(null)
+                      setIfcExtractError(null)
+                      setIfcExtractSource(null)
+                      fetch(validated)
+                        .then((r) => r.arrayBuffer())
+                        .then((buf) => extractIfcInBrowser({ buffer: buf, file_name: fileName, source_url: validated, source_key: `url:${validated}` }))
+                        .catch(() => {})
+                      setPublicIfcUrl("")
+                    }}
+                    className="rounded-md border border-[#0d9488]/40 bg-[#0d9488]/10 px-3 py-2 text-sm text-[#0d9488] hover:bg-[#0d9488]/15 transition disabled:opacity-60"
+                    disabled={loading || publicIfcUrlBusy || !publicIfcUrl.trim()}
+                  >
+                    View
+                  </button>
+                </div>
+                {publicIfcUrlError ? <div className="mt-1 text-[11px] text-red-600">{publicIfcUrlError}</div> : null}
+                {ifcExtractBusy ? <div className="mt-1 text-[11px] text-gray-600">Extracting IFC data for chat…</div> : null}
+                {ifcExtractError ? <div className="mt-1 text-[11px] text-red-600">IFC extraction failed: {ifcExtractError}</div> : null}
               </div>
             </div>
           </div>

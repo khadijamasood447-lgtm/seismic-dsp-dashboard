@@ -1,6 +1,5 @@
-import fs from 'fs'
-import path from 'path'
 import { createClient } from '@supabase/supabase-js'
+import embeddedBundle from '@/public/islamabad_grid_bundle.json'
 
 type GridBundle = {
   crs: string
@@ -19,31 +18,28 @@ async function loadBundle(): Promise<GridBundle> {
   if (loading) return loading
 
   loading = (async () => {
-    const filePath = path.join(process.cwd(), 'public', 'islamabad_grid_bundle.json')
-    if (fs.existsSync(filePath)) {
-      const raw = fs.readFileSync(filePath, 'utf-8')
-      cached = JSON.parse(raw) as GridBundle
-      return cached
-    }
+    const embedded = embeddedBundle as unknown as GridBundle
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY
     const bucket = process.env.SUPABASE_RUNTIME_BUCKET || 'predictions_cache'
     const objectPath = process.env.SUPABASE_GRID_BUNDLE_PATH || 'runtime/islamabad_grid_bundle.json'
 
-    if (!url || !key) {
-      throw new Error('Missing local islamabad_grid_bundle.json and Supabase runtime storage env is not configured')
+    if (url && key) {
+      try {
+        const supabase = createClient(url, key, {
+          auth: { persistSession: false, autoRefreshToken: false },
+        })
+        const { data, error } = await supabase.storage.from(bucket).download(objectPath)
+        if (!error && data) {
+          const raw = await data.text()
+          cached = JSON.parse(raw) as GridBundle
+          return cached
+        }
+      } catch {}
     }
 
-    const supabase = createClient(url, key, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    })
-    const { data, error } = await supabase.storage.from(bucket).download(objectPath)
-    if (error || !data) {
-      throw new Error(`Failed to download runtime grid bundle from Supabase Storage (${bucket}/${objectPath}): ${error?.message ?? 'unknown error'}`)
-    }
-    const raw = await data.text()
-    cached = JSON.parse(raw) as GridBundle
+    cached = embedded
     return cached
   })()
 

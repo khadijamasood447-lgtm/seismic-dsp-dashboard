@@ -23,6 +23,7 @@ type ChatRequest = {
   conversation_id?: string
   client_id?: string
   attachments?: Array<{ type: 'ifc'; file_url: string; file_name?: string }>
+  ifc_extracted_data?: any
   context?: {
     depth?: number
     location?: string
@@ -105,6 +106,18 @@ function fmt(n: any, digits = 0) {
   const x = typeof n === 'number' ? n : Number(n)
   if (!Number.isFinite(x)) return 'N/A'
   return x.toFixed(digits)
+}
+
+function safeJsonForPrompt(value: any, maxChars: number) {
+  if (value == null) return null
+  if (typeof value !== 'object') return null
+  try {
+    const s = JSON.stringify(value)
+    if (s.length <= maxChars) return value
+    return { truncated: true, chars: s.length }
+  } catch {
+    return null
+  }
 }
 
 function defaultAnswerFromData(data: any): ChatResponse {
@@ -750,6 +763,7 @@ export async function POST(req: Request) {
       data_quoted: dataQuoted,
       ui_context: ctx,
       attachments,
+      ifc_extracted_data: safeJsonForPrompt((body as any)?.ifc_extracted_data, 45_000),
     })
 
   const requestMessages = hist.map((h) => ({ role: h.role, content: [{ type: 'text', text: h.content }] }))
