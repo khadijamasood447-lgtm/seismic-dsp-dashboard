@@ -218,7 +218,7 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
   }, [])
 
   useEffect(() => {
-    const load = async () => {
+    const loadModel = async () => {
       if (!modelUrl) return
       const t = threeRef.current
       if (!t?.scene || !t?.THREE) return
@@ -242,10 +242,8 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
       const { IFCLoader } = await import("three/examples/jsm/loaders/IFCLoader.js")
 
       const loader = new IFCLoader()
-// Get the current port dynamically
-const wasmPath = `${window.location.origin}/wasm/`
-loader.ifcManager.setWasmPath(wasmPath)
-console.log("WASM path set to:", wasmPath)      // For simplified loading, hide all but first storey
+      loader.ifcManager.setWasmPath("/wasm/")
+
       if (loadSimplified) {
         loader.ifcManager.listener = () => {
           // Will be populated with filtering logic
@@ -260,11 +258,8 @@ console.log("WASM path set to:", wasmPath)      // For simplified loading, hide 
       loader.load(
         modelUrl,
         (ifcModel: any) => {
-          // If simplified mode, remove higher storeys
           if (loadSimplified && ifcViz?.storeys && ifcViz.storeys > 1) {
-            let storeyCount = 0
             ifcModel.traverse((child: any) => {
-              // Hide elements from storeys beyond the first
               if (child.userData?.storeyIndex !== undefined && child.userData.storeyIndex > 0) {
                 child.visible = false
               }
@@ -297,8 +292,8 @@ console.log("WASM path set to:", wasmPath)      // For simplified loading, hide 
       )
     }
 
-    load()
-  }, [modelUrl, loadSimplified])
+    loadModel()
+  }, [modelUrl, loadSimplified, ifcViz])
 
   useEffect(() => {
     const t = threeRef.current
@@ -426,7 +421,7 @@ console.log("WASM path set to:", wasmPath)      // For simplified loading, hide 
             <div className="bg-card border border-border rounded-lg p-4">
               <h3 className="text-sm uppercase tracking-wider text-[#0d9488] mb-2">Next Step</h3>
               <div className="text-xs text-muted-foreground">
-                Ask in chat: “Analyze this model against BCP-SP 2021” to run screening checks at the building location.
+                Ask in chat: "Analyze this model against BCP-SP 2021" to run screening checks at the building location.
               </div>
             </div>
           </div>
