@@ -32,7 +32,7 @@ function numValue(v: any): number | null {
 
 async function initIfcApi() {
   const api = new IfcAPI()
-  ;(api as any).SetWasmPath?.("/wasm/")
+  api.SetWasmPath("/wasm/", true)
   await api.Init()
   return api
 }
@@ -135,4 +135,3 @@ export async function extractIfcForChat(args: { buffer: ArrayBuffer; file_name?:
     } catch {}
   }
 }
-

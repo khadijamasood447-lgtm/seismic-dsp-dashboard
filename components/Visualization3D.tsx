@@ -228,6 +228,7 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
 
       const loader = new IFCLoader()
       loader.ifcManager.setWasmPath("/wasm/")
+      loader.ifcManager.useWebWorkers(false)
       
       // For simplified loading, hide all but first storey
       if (loadSimplified) {
@@ -276,7 +277,7 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
         },
         undefined,
         () => {
-          setStatus("Failed to load IFC model. Confirm the IFC URL is accessible and try again.")
+          setStatus("Failed to load IFC model. Confirm /wasm/web-ifc.wasm is reachable and the IFC URL is accessible.")
         },
       )
     }

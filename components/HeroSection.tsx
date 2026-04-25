@@ -61,8 +61,8 @@ export function HeroSection({ onNavigate, onSelectRole }: HeroSectionProps) {
   const [showImpactTitle, setShowImpactTitle] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
   const [showGraphCaption, setShowGraphCaption] = useState(false);
-  const [soilBackgroundUrl, setSoilBackgroundUrl] = useState('/placeholder.jpg');
-  const [aboutUsBackgroundUrl, setAboutUsBackgroundUrl] = useState('/placeholder.jpg');
+  const [soilBackgroundUrl, setSoilBackgroundUrl] = useState('/Images/soilbackground.jpeg');
+  const [aboutUsBackgroundUrl, setAboutUsBackgroundUrl] = useState('/Images/aboutus.jpeg');
   
   // ========== REFS ==========
   const heroSectionRef = useRef<HTMLDivElement>(null);
@@ -555,7 +555,7 @@ export function HeroSection({ onNavigate, onSelectRole }: HeroSectionProps) {
         <div className="absolute inset-0 w-full h-full z-0">
           <img
             className="absolute inset-0 h-full w-full object-cover"
-            src="/placeholder.jpg"
+            src="/Images/HEROSECTION.jfif"
             alt="Seismic dashboard image"
           />
         </div>
@@ -732,7 +732,7 @@ export function HeroSection({ onNavigate, onSelectRole }: HeroSectionProps) {
                 showImpactImage ? 'animate-fade-in-scale' : 'opacity-0 scale-90'
               }`}>
                 <img
-                  src="/placeholder.jpg"
+                  src="/Images/impact.png"
                   alt="Seismic Impact Visualization"
                   className="max-w-full h-auto animate-float"
                   style={{ 
@@ -848,7 +848,7 @@ export function HeroSection({ onNavigate, onSelectRole }: HeroSectionProps) {
             showSkyline ? 'animate-float opacity-100' : 'opacity-0 translate-y-50'
           }`}>
             <img
-              src="/placeholder.jpg"
+              src="/Images/skylineformission.png"
               alt="Skyline mission"
               className="w-full h-auto object-cover "
               style={{ 
