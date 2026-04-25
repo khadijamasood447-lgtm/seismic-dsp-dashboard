@@ -4,6 +4,19 @@ import { insertChatMessage, upsertChatSession } from '@/lib/supabase/app-data'
 
 export const dynamic = 'force-dynamic'
 
+function safeJsonParse(value: any) {
+  if (value == null) return null
+  if (typeof value === 'object') return value
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    return null
+  }
+}
+
 function safeJsonForPrompt(value: any, maxChars: number) {
   if (value == null) return 'null'
   if (typeof value !== 'object') return 'null'
@@ -16,12 +29,32 @@ function safeJsonForPrompt(value: any, maxChars: number) {
   }
 }
 
+function summarizeIfcExtractedData(value: any) {
+  if (!value || typeof value !== 'object') return null
+  const schema = typeof value.schema === 'string' ? value.schema : undefined
+  const file_name = typeof value.file_name === 'string' ? value.file_name : undefined
+  const stats = value.stats && typeof value.stats === 'object' ? value.stats : null
+  const quantities = value.quantities && typeof value.quantities === 'object' ? value.quantities : null
+
+  return {
+    schema,
+    file_name,
+    stats,
+    quantities,
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const reqId = `chat_${Date.now()}_${Math.random().toString(16).slice(2)}`
     const startedAt = Date.now()
     const userId = getUserIdFromHeaders(req)
-    const { message, conversation_id, attachments, context, ifc_extracted_data } = await req.json()
+    const body = await req.json().catch(() => null)
+    const message = body?.message
+    const conversation_id = body?.conversation_id
+    const attachments = body?.attachments
+    const context = body?.context
+    const ifc_extracted_data = safeJsonParse(body?.ifc_extracted_data)
 
     if (!message) {
       return NextResponse.json({ ok: false, error: 'Message is required' }, { status: 400 })
@@ -31,8 +64,21 @@ export async function POST(req: Request) {
     const anthropicModel = process.env.ANTHROPIC_MODEL || 'claude-3-sonnet-20241022'
 
     if (!anthropicKey) {
-      return NextResponse.json({ ok: false, error: 'Anthropic API key not configured' }, { status: 500 })
+      console.error('CHAT_STREAM_MISSING_ANTHROPIC_KEY', { reqId })
+      return NextResponse.json(
+        { ok: false, error: 'Anthropic API key not configured', reqId },
+        { status: 503 },
+      )
     }
+
+    let ifcSize = 0
+    try {
+      ifcSize = ifc_extracted_data ? JSON.stringify(ifc_extracted_data).length : 0
+    } catch {
+      ifcSize = -1
+    }
+
+    const ifcForPrompt = ifcSize > 50_000 ? summarizeIfcExtractedData(ifc_extracted_data) : ifc_extracted_data
 
     console.log('CHAT_STREAM_REQUEST', {
       reqId,
@@ -40,6 +86,8 @@ export async function POST(req: Request) {
       has_conversation_id: Boolean(conversation_id),
       msg_chars: String(message).length,
       attachments: Array.isArray(attachments) ? attachments.length : 0,
+      has_ifc_extracted_data: Boolean(ifc_extracted_data),
+      ifc_extracted_size_chars: ifcSize,
     })
 
     const ifcAttachment =
@@ -87,7 +135,7 @@ export async function POST(req: Request) {
 
     // 1. Prepare conversation history and context
     // (Simplified for streaming implementation)
-    const ifcJson = safeJsonForPrompt(ifc_extracted_data, 45_000)
+    const ifcJson = safeJsonForPrompt(ifcForPrompt, 45_000)
     const systemPrompt = `You are a Geo-Structural Engineering Assistant specializing in soil liquefaction risk assessment for Islamabad.
     
     GUIDELINES:
@@ -130,8 +178,13 @@ export async function POST(req: Request) {
     clearTimeout(timeout)
 
     if (!response.ok) {
-      const error = await response.text()
-      throw new Error(`Anthropic error: ${error}`)
+      const errorText = await response.text().catch(() => '')
+      console.error('CHAT_STREAM_ANTHROPIC_ERROR', {
+        reqId,
+        status: response.status,
+        body_preview: String(errorText).slice(0, 800),
+      })
+      throw new Error(`Anthropic error (${response.status}): ${String(errorText).slice(0, 500)}`)
     }
 
     // 3. Setup streaming response
@@ -200,7 +253,8 @@ export async function POST(req: Request) {
     })
 
   } catch (error: any) {
-    console.error('Chat stream error:', error)
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    const msg = String(error?.message ?? 'Chat stream failed')
+    console.error('CHAT_STREAM_FATAL', { message: msg, stack: error?.stack })
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 })
   }
 }

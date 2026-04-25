@@ -132,10 +132,15 @@ export default function ChatbotWidget() {
   }, [clientId])
 
   const loadSession = useCallback(async (id: string) => {
-    setSessionId(id)
-    setActiveSessionId(id)
+    const sid = String(id ?? "").trim()
+    if (!sid) {
+      setMessages([introMessage()])
+      return
+    }
+    setSessionId(sid)
+    setActiveSessionId(sid)
     try {
-      const res = await fetch(`/api/sessions/${id}/messages`, {
+      const res = await fetch(`/api/sessions/${sid}/messages`, {
         headers: { "x-client-id": clientId, ...(getUserIdHeader() ? { "x-user-id": getUserIdHeader()! } : {}) },
       })
       const json = await res.json().catch(() => null)
@@ -155,7 +160,7 @@ export default function ChatbotWidget() {
         return
       }
     } catch {}
-    const local = loadLocalMessages(clientId, id)
+    const local = loadLocalMessages(clientId, sid)
     if (local.length) {
       setMessages(local.map((m) => ({ id: m.id, role: m.role, text: m.text })))
       return
