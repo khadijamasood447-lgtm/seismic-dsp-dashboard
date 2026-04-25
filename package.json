@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/copy-web-ifc-assets.cjs && next dev",
     "prebuild": "node scripts/prebuild-clean.cjs && node scripts/copy-web-ifc-assets.cjs && node scripts/validate-env.cjs",
     "build": "next build",
     "start": "next start",

@@ -53,21 +53,17 @@ function countByType(api: IfcAPI, modelID: number) {
   const byType: Record<string, number> = {}
   let total = 0
   for (const [t, name] of types) {
-    const ids = api.GetAllItemsOfType(modelID, t, false)
-    byType[name] = ids?.size?.() ? ids.size() : Array.isArray(ids) ? ids.length : 0
+    const ids = api.GetLineIDsWithType(modelID, t)
+    byType[name] = ids?.size?.() ? ids.size() : 0
     total += byType[name] || 0
   }
   return { byType, total }
 }
 
 function extractTotalFloorAreaFromSpaces(api: IfcAPI, modelID: number) {
-  const spaceIDs = api.GetAllItemsOfType(modelID, IFCSPACE, false)
+  const spaceIDs = api.GetLineIDsWithType(modelID, IFCSPACE)
   const ids: number[] = []
-  if (spaceIDs?.size?.()) {
-    for (let i = 0; i < spaceIDs.size(); i++) ids.push(spaceIDs.get(i))
-  } else if (Array.isArray(spaceIDs)) {
-    ids.push(...spaceIDs)
-  }
+  if (spaceIDs?.size?.()) for (let i = 0; i < spaceIDs.size(); i++) ids.push(spaceIDs.get(i))
 
   let total = 0
   let foundAny = false

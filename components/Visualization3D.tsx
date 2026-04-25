@@ -228,8 +228,6 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
 
       const loader = new IFCLoader()
       loader.ifcManager.setWasmPath("/wasm/")
-      loader.ifcManager.useWebWorkers(false)
-      
       // For simplified loading, hide all but first storey
       if (loadSimplified) {
         loader.ifcManager.listener = () => {
