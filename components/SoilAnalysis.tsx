@@ -139,9 +139,7 @@ export function SoilAnalysis() {
           format: new GeoJSON({ featureProjection: 'EPSG:3857' })
         });
 
-        boundarySource.on('featuresloaderror', () => {
-          setMapError('Failed to load AOI boundary data')
-        })
+        boundarySource.on('featuresloaderror', () => {})
 
         const boundaryLayer = new VectorLayer({
           source: boundarySource,
@@ -781,8 +779,8 @@ export function SoilAnalysis() {
                     <div className="mt-1 text-[11px] text-gray-600 text-center">
                       {data.shallowVsByDepth && Object.keys(data.shallowVsByDepth).length ? (
                         <span>
-                          1–5m:{" "}
-                          {[1, 2, 3, 4, 5]
+                          1–2m:{" "}
+                          {[1, 2]
                             .map((d) => {
                               const v = (data.shallowVsByDepth as any)[String(d)]
                               return typeof v === "number" ? `${d}m ${v.toFixed(0)}` : `${d}m N/A`
@@ -790,7 +788,7 @@ export function SoilAnalysis() {
                             .join(" · ")}
                         </span>
                       ) : (
-                        <span>1–5m: N/A</span>
+                        <span>1–2m: N/A</span>
                       )}
                     </div>
                     <div className="relative w-[140px] h-[140px]">

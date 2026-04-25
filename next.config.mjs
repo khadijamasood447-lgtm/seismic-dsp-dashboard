@@ -1,13 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ["pdfkit"],
-  },
+  serverExternalPackages: ["pdfkit"],
   typescript: {
     ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
   },
   images: {
     unoptimized: true,

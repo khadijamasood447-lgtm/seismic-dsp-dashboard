@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { Layers } from "lucide-react"
 import { Button } from "./ui/button"
 import ChatbotWidget from "./ChatbotWidget"
+import { IfcParser, extractEntityAttributesOnDemand, extractPropertiesOnDemand, type IfcDataStore } from "@ifc-lite/parser"
+import { GeometryProcessor, type MeshData } from "@ifc-lite/geometry"
 
 type IfcViz = {
   ok: boolean
@@ -38,8 +40,18 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
   const containerRef = useRef<HTMLDivElement | null>(null)
   const threeRef = useRef<any>(null)
   const complianceRef = useRef<ComplianceResult | null>(initialComplianceResult)
+  const ifcRuntimeRef = useRef<{
+    parser: IfcParser
+    geometry: GeometryProcessor
+    ready: boolean
+    store: IfcDataStore | null
+  } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const selectedMeshRef = useRef<any>(null)
   const [ifcViz, setIfcViz] = useState<IfcViz | null>(null)
   const [modelUrl, setModelUrl] = useState<string | null>(null)
+  const [localFile, setLocalFile] = useState<File | null>(null)
+  const [modelFileName, setModelFileName] = useState<string | null>(null)
   const [status, setStatus] = useState<string>("No IFC loaded yet. Upload an IFC in chat to visualize it here.")
   const [complianceResult, setComplianceResult] = useState<ComplianceResult | null>(initialComplianceResult)
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null)
@@ -77,11 +89,16 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
   useEffect(() => {
     const stored = readStoredIfc()
     if (stored?.url) setModelUrl(stored.url)
+    if (stored?.file_name) setModelFileName(stored.file_name)
     const onIfc = (ev: any) => {
       const d = (ev?.detail ?? null) as IfcViz | null
       if (!d) return
       setIfcViz(d)
-      if (d?.model_url) setModelUrl(String(d.model_url))
+      if (d?.model_url) {
+        setLocalFile(null)
+        setModelUrl(String(d.model_url))
+        setModelFileName(d?.file_name ?? null)
+      }
     }
     window.addEventListener("seismic-ifc-model", onIfc as any)
     const onCompliance = (ev: any) => {
@@ -153,24 +170,68 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
       const pointer = new THREE.Vector2()
       const onClick = (ev: MouseEvent) => {
         const host = mountRef.current
-        const currentCompliance = complianceRef.current
-        if (!host || !threeRef.current?.ifcModel || !currentCompliance?.findings?.length) return
+        if (!host || !threeRef.current?.ifcGroup) return
         const rect = host.getBoundingClientRect()
         pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1
         pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1
         raycaster.setFromCamera(pointer, camera)
-        const intersects = raycaster.intersectObject(threeRef.current.ifcModel, true)
+        const intersects = raycaster.intersectObject(threeRef.current.ifcGroup, true)
         if (!intersects.length) {
           setTooltip(null)
+          if (selectedMeshRef.current?.material?.emissive) {
+            try {
+              selectedMeshRef.current.material.emissive.setHex(0x000000)
+            } catch {}
+          }
+          selectedMeshRef.current = null
           return
         }
-        const fail = currentCompliance.findings.find((f) => f.status === "fail")
-        const warn = currentCompliance.findings.find((f) => f.status === "warning")
-        const item = fail ?? warn ?? currentCompliance.findings[0]
+
+        let obj: any = intersects[0]?.object
+        while (obj && obj.parent && !obj.userData?.expressId) obj = obj.parent
+        const expressId = typeof obj?.userData?.expressId === "number" ? obj.userData.expressId : null
+        const ifcType = typeof obj?.userData?.ifcType === "string" ? obj.userData.ifcType : null
+
+        if (selectedMeshRef.current?.material?.emissive) {
+          try {
+            selectedMeshRef.current.material.emissive.setHex(0x000000)
+          } catch {}
+        }
+        selectedMeshRef.current = obj
+        if (obj?.material?.emissive) {
+          try {
+            obj.material.emissive.setHex(0x1d4ed8)
+          } catch {}
+        }
+
+        const store = ifcRuntimeRef.current?.store ?? null
+        const attrs = store && expressId != null ? extractEntityAttributesOnDemand(store, expressId) : null
+        const psets = store && expressId != null ? extractPropertiesOnDemand(store, expressId) : []
+        const keyProps: string[] = []
+        for (const ps of psets.slice(0, 3)) {
+          for (const p of (ps?.properties ?? []).slice(0, 6)) {
+            const pv: any = (p as any)?.value
+            const txt =
+              typeof pv === "string"
+                ? pv
+                : typeof pv === "number"
+                  ? String(pv)
+                  : typeof pv?.value === "string" || typeof pv?.value === "number"
+                    ? String(pv.value)
+                    : null
+            if (txt) keyProps.push(`${String((p as any)?.name ?? "")}=${txt}`)
+            if (keyProps.length >= 6) break
+          }
+          if (keyProps.length >= 6) break
+        }
+
         setTooltip({
           x: ev.clientX - rect.left,
           y: ev.clientY - rect.top,
-          text: `${String(item?.status ?? "info").toUpperCase()} · ${item?.code_section ?? "BCP-SP 2021"}\n${item?.recommendation ?? item?.message ?? ""}`,
+          text:
+            expressId != null
+              ? `${ifcType ?? "IFC"} #${expressId}\n${attrs?.name ? `Name: ${attrs.name}\n` : ""}${attrs?.globalId ? `GlobalId: ${attrs.globalId}\n` : ""}${keyProps.length ? `Props: ${keyProps.join(" · ")}` : ""}`
+              : "Selection unavailable",
         })
       }
       renderer.domElement.addEventListener("click", onClick)
@@ -192,7 +253,7 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
         grid,
         onResize,
         onClick,
-        ifcModel: null as any,
+        ifcGroup: null as any,
       }
     }
 
@@ -218,90 +279,217 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
   }, [])
 
   useEffect(() => {
+    const disposeGroup = (group: any) => {
+      group?.traverse?.((obj: any) => {
+        if (obj?.geometry?.dispose) {
+          try {
+            obj.geometry.dispose()
+          } catch {}
+        }
+        const mat = obj?.material
+        if (Array.isArray(mat)) {
+          for (const m of mat) {
+            if (m?.dispose) {
+              try {
+                m.dispose()
+              } catch {}
+            }
+          }
+        } else if (mat?.dispose) {
+          try {
+            mat.dispose()
+          } catch {}
+        }
+      })
+    }
+
+    const meshDataToThree = (THREE: any, mesh: MeshData) => {
+      const geometry = new THREE.BufferGeometry()
+      geometry.setAttribute("position", new THREE.BufferAttribute(mesh.positions, 3))
+      geometry.setAttribute("normal", new THREE.BufferAttribute(mesh.normals, 3))
+      geometry.setIndex(new THREE.BufferAttribute(mesh.indices, 1))
+      geometry.computeBoundingBox()
+      const [r, g, b, a] = (mesh as any).color ?? [0.7, 0.7, 0.75, 1]
+      const material = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(r, g, b),
+        transparent: a < 1,
+        opacity: typeof a === "number" ? a : 1,
+        side: THREE.DoubleSide,
+      })
+      const threeMesh = new THREE.Mesh(geometry, material)
+      threeMesh.userData.expressId = mesh.expressId
+      if (typeof (mesh as any).ifcType === "string") threeMesh.userData.ifcType = (mesh as any).ifcType
+      const bb = geometry.boundingBox
+      if (bb) threeMesh.userData.meshZMax = bb.max.z
+      return threeMesh
+    }
+
+    const getTypeCount = (store: IfcDataStore, keys: string[]) => {
+      for (const k of keys) {
+        const ids = store.entityIndex.byType.get(k)
+        if (Array.isArray(ids)) return ids.length
+      }
+      return 0
+    }
+
+    const getFirstByType = (store: IfcDataStore, keys: string[]) => {
+      for (const k of keys) {
+        const ids = store.entityIndex.byType.get(k)
+        if (Array.isArray(ids) && ids.length) return ids[0]
+      }
+      return null
+    }
+
     const loadModel = async () => {
-      if (!modelUrl) return
       const t = threeRef.current
       if (!t?.scene || !t?.THREE) return
+      const hasUrl = Boolean(modelUrl)
+      const hasFile = Boolean(localFile)
+      if (!hasUrl && !hasFile) return
+
+      const fileName = localFile?.name ?? modelFileName ?? null
 
       setStatus(loadSimplified ? "Loading simplified model (first floor)…" : "Loading IFC model…")
+      setTooltip(null)
+      if (selectedMeshRef.current?.material?.emissive) {
+        try {
+          selectedMeshRef.current.material.emissive.setHex(0x000000)
+        } catch {}
+      }
+      selectedMeshRef.current = null
 
+      if (t.ifcGroup) {
+        t.scene.remove(t.ifcGroup)
+        disposeGroup(t.ifcGroup)
+        t.ifcGroup = null
+      }
+
+      let buffer: ArrayBuffer
       try {
-        const wasmRes = await fetch("/wasm/web-ifc.wasm", { method: "GET" })
-        const ct = (wasmRes.headers.get("content-type") || "").toLowerCase()
-        if (!wasmRes.ok || ct.includes("text/html")) {
-          setStatus(
-            `web-ifc wasm is not being served correctly from /wasm/web-ifc.wasm (status ${wasmRes.status}, content-type ${ct || "unknown"}). Ensure public/wasm/web-ifc.wasm exists and restart the dev server.`,
-          )
-          return
+        if (localFile) {
+          buffer = await localFile.arrayBuffer()
+        } else {
+          const res = await fetch(String(modelUrl))
+          if (!res.ok) throw new Error(`Fetch failed (${res.status})`)
+          buffer = await res.arrayBuffer()
         }
-      } catch {
-        setStatus("Unable to verify /wasm/web-ifc.wasm. Ensure it exists under public/wasm/ and try again.")
+      } catch (e: any) {
+        setStatus(`Failed to load IFC bytes: ${String(e?.message ?? e)}`)
         return
       }
 
-      const { IFCLoader } = await import("three/examples/jsm/loaders/IFCLoader.js")
+      const fileSizeMB = buffer.byteLength / 1_048_576
 
-      const loader = new IFCLoader()
-      loader.ifcManager.setWasmPath("/wasm/")
-
-      if (loadSimplified) {
-        loader.ifcManager.listener = () => {
-          // Will be populated with filtering logic
-        }
-      }
-
-      if (t.ifcModel) {
-        t.scene.remove(t.ifcModel)
-        t.ifcModel = null
-      }
-
-      loader.load(
-        modelUrl,
-        (ifcModel: any) => {
-          if (loadSimplified && ifcViz?.storeys && ifcViz.storeys > 1) {
-            ifcModel.traverse((child: any) => {
-              if (child.userData?.storeyIndex !== undefined && child.userData.storeyIndex > 0) {
-                child.visible = false
-              }
-            })
-            setStatus(`Simplified view: Showing first storey only (${ifcViz.storeys} total storeys).`)
+      try {
+        if (!ifcRuntimeRef.current) {
+          ifcRuntimeRef.current = {
+            parser: new IfcParser(),
+            geometry: new GeometryProcessor(),
+            ready: false,
+            store: null,
           }
-          
-          t.ifcModel = ifcModel
-          t.scene.add(ifcModel)
+        }
+        const rt = ifcRuntimeRef.current
+        if (!rt.ready) {
+          await rt.geometry.init()
+          rt.ready = true
+        }
 
-          const box = new t.THREE.Box3().setFromObject(ifcModel)
-          const size = box.getSize(new t.THREE.Vector3())
-          const center = box.getCenter(new t.THREE.Vector3())
+        const store = await rt.parser.parseColumnar(buffer, {
+          onProgress: (p) => {
+            const pct = Number.isFinite(Number((p as any)?.percent)) ? Number((p as any).percent) : 0
+            setStatus(`Parsing: ${String((p as any)?.phase ?? "IFC")} ${pct.toFixed(0)}%`)
+          },
+        })
+        rt.store = store
 
-          const maxDim = Math.max(size.x, size.y, size.z) || 10
-          const dist = maxDim * 1.6
-          t.controls.target.set(center.x, center.y, center.z)
-          t.camera.position.set(center.x + dist, center.y + dist * 0.6, center.z + dist)
-          t.camera.near = Math.max(0.01, maxDim / 2000)
-          t.camera.far = Math.max(5000, maxDim * 50)
-          t.camera.updateProjectionMatrix()
-          t.controls.update()
+        const group = new t.THREE.Group()
+        group.name = "ifcGroup"
+        t.ifcGroup = group
+        t.scene.add(group)
 
+        let added = 0
+        const u8 = new Uint8Array(buffer)
+        const gen = rt.geometry.processAdaptive(u8, {
+          sizeThreshold: 2_000_000,
+          batchSize: { initialBatchSize: 50, maxBatchSize: 400, fileSizeMB },
+        })
+        for await (const ev of gen as any) {
+          if (ev?.type === "batch" && Array.isArray(ev.meshes)) {
+            for (const md of ev.meshes as MeshData[]) {
+              group.add(meshDataToThree(t.THREE, md))
+              added++
+            }
+            setStatus(`Building geometry… ${added} meshes`)
+          }
+          if (ev?.type === "complete") break
+        }
+
+        const box = new t.THREE.Box3().setFromObject(group)
+        const size = box.getSize(new t.THREE.Vector3())
+        const center = box.getCenter(new t.THREE.Vector3())
+        const maxDim = Math.max(size.x, size.y, size.z) || 10
+        const dist = maxDim * 1.6
+        t.controls.target.set(center.x, center.y, center.z)
+        t.camera.position.set(center.x + dist, center.y + dist * 0.6, center.z + dist)
+        t.camera.near = Math.max(0.01, maxDim / 2000)
+        t.camera.far = Math.max(5000, maxDim * 50)
+        t.camera.updateProjectionMatrix()
+        t.controls.update()
+
+        if (loadSimplified) {
+          const cutoff = box.min.z + 4.0
+          group.traverse((obj: any) => {
+            if (typeof obj?.userData?.meshZMax === "number") obj.visible = obj.userData.meshZMax <= cutoff
+          })
+          setStatus("Simplified view: Showing approx. first storey only.")
+        } else {
           setStatus("IFC loaded. Use mouse/touch to orbit, pan, and zoom.")
-        },
-        undefined,
-        () => {
-          setStatus("Failed to load IFC model. Confirm /wasm/web-ifc.wasm is reachable and the IFC URL is accessible.")
-        },
-      )
+        }
+
+        const storeys = getTypeCount(store, ["IFCBUILDINGSTOREY", "IfcBuildingStorey"])
+        const buildingId = getFirstByType(store, ["IFCBUILDING", "IfcBuilding"])
+        const buildingAttrs = buildingId != null ? extractEntityAttributesOnDemand(store, buildingId) : null
+        const element_counts = {
+          columns: getTypeCount(store, ["IFCCOLUMN", "IfcColumn"]),
+          beams: getTypeCount(store, ["IFCBEAM", "IfcBeam"]),
+          footings: getTypeCount(store, ["IFCFOOTING", "IfcFooting"]),
+          walls: getTypeCount(store, ["IFCWALL", "IFCWALLSTANDARDCASE", "IfcWall", "IfcWallStandardCase"]),
+        }
+
+        const warnings: string[] = []
+        if (fileSizeMB >= 50) warnings.push(`Large IFC file (${fileSizeMB.toFixed(1)} MB). Simplified mode may be faster.`)
+
+        setIfcViz({
+          ok: true,
+          model_url: hasUrl ? String(modelUrl) : undefined,
+          file_name: fileName,
+          storeys: storeys || undefined,
+          element_counts,
+          building:
+            buildingAttrs?.name || size.z
+              ? {
+                  name: buildingAttrs?.name || undefined,
+                  height_m: size.z || null,
+                }
+              : null,
+          warnings,
+        })
+      } catch (e: any) {
+        setStatus(`Failed to parse/render IFC: ${String(e?.message ?? e)}`)
+      }
     }
 
     loadModel()
-  }, [modelUrl, loadSimplified, ifcViz])
+  }, [modelUrl, localFile, loadSimplified, modelFileName])
 
   useEffect(() => {
     const t = threeRef.current
-    if (!t?.ifcModel || !t?.THREE) return
+    if (!t?.ifcGroup || !t?.THREE) return
     const hasFail = (complianceResult?.summary?.fail_count ?? 0) > 0
     const hasWarn = (complianceResult?.summary?.warning_count ?? 0) > 0
-    const color = hasFail ? new t.THREE.Color(0xd9463f) : hasWarn ? new t.THREE.Color(0xeab308) : new t.THREE.Color(0x9ca3af)
-    t.ifcModel.traverse((obj: any) => {
+    const color = hasFail ? new t.THREE.Color(0xd9463f) : hasWarn ? new t.THREE.Color(0xeab308) : new t.THREE.Color(0x16a34a)
+    t.ifcGroup.traverse((obj: any) => {
       if (!obj?.isMesh || !obj?.material) return
       const mat = obj.material
       if (Array.isArray(mat)) {
@@ -316,7 +504,7 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
         mat.needsUpdate = true
       }
     })
-  }, [complianceResult, modelUrl])
+  }, [complianceResult, modelUrl, localFile])
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -342,6 +530,28 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
               </div>
 
               <div className="absolute right-3 top-3 flex gap-2 z-10">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".ifc"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] ?? null
+                    if (!f) return
+                    setTooltip(null)
+                    setModelUrl(null)
+                    setLocalFile(f)
+                    setModelFileName(f.name)
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="bg-white/80 backdrop-blur-sm border border-gray-300 text-gray-900 h-8 px-2"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Open IFC
+                </Button>
                 <Button
                   size="sm"
                   variant="secondary"
@@ -421,7 +631,7 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
             <div className="bg-card border border-border rounded-lg p-4">
               <h3 className="text-sm uppercase tracking-wider text-[#0d9488] mb-2">Next Step</h3>
               <div className="text-xs text-muted-foreground">
-                Ask in chat: "Analyze this model against BCP-SP 2021" to run screening checks at the building location.
+                Ask in chat: &quot;Analyze this model against BCP-SP 2021&quot; to run screening checks at the building location.
               </div>
             </div>
           </div>

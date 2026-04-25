@@ -9,11 +9,8 @@ interface SoilSeismicDataProps {
 }
 
 const soilData = [
-  { depth: "0-5m", density: 1.8, shearWave: 250 },
-  { depth: "5-10m", density: 1.9, shearWave: 320 },
-  { depth: "10-15m", density: 2.0, shearWave: 380 },
-  { depth: "15-20m", density: 2.1, shearWave: 420 },
-  { depth: "20-25m", density: 2.2, shearWave: 480 },
+  { depth: "1m", density: 1.8, shearWave: 250 },
+  { depth: "2m", density: 1.85, shearWave: 285 },
 ]
 
 export function SoilSeismicData({ user }: SoilSeismicDataProps) {

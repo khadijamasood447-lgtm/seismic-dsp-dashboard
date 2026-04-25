@@ -235,8 +235,8 @@ export default function ChatbotWidget() {
   }, [])
 
   const extractIfcInBrowser = useCallback(
-    async (args: { buffer: ArrayBuffer; file_name?: string; source_url?: string; source_key: string }) => {
-      if (ifcExtractBusy && ifcExtractSource === args.source_key) return
+    async (args: { buffer: ArrayBuffer; file_name?: string; source_url?: string; source_key: string }): Promise<IfcExtractedChatData | null> => {
+      if (ifcExtractBusy && ifcExtractSource === args.source_key) return null
       setIfcExtractBusy(true)
       setIfcExtractError(null)
       setIfcExtractSource(args.source_key)
@@ -244,11 +244,12 @@ export default function ChatbotWidget() {
         const mod = await import("@/lib/ifc/extractIfcForChat")
         const extracted = await mod.extractIfcForChat({ buffer: args.buffer, file_name: args.file_name, source_url: args.source_url })
         setIfcExtractedData(extracted)
+        return extracted
       } catch (e: any) {
         const msg = String(e?.message ?? "IFC extraction failed")
-        const looksLikeWasmFailure = /wasm|webassembly|aborted\(|mime type|unsupported mime/i.test(msg)
+        const shouldFallback = /out of memory|memory|rangeerror|maximum call stack|aborted\(|failed to parse|parse/i.test(msg)
 
-        if (looksLikeWasmFailure) {
+        if (shouldFallback) {
           try {
             const MAX_LITE_BYTES = 10_000_000
             if (args.buffer.byteLength > MAX_LITE_BYTES) throw new Error("IFC is too large for fallback extraction.")
@@ -280,17 +281,18 @@ export default function ChatbotWidget() {
               },
             }
             setIfcExtractedData(extracted)
-            setIfcExtractError(`web-ifc WASM failed to load; using limited fallback extraction.`)
-            return
+            setIfcExtractError("Advanced IFC extraction failed; using limited fallback extraction.")
+            return extracted
           } catch (fallbackErr: any) {
             setIfcExtractedData(null)
             setIfcExtractError(`${msg} (fallback failed: ${String(fallbackErr?.message ?? fallbackErr)})`)
-            return
+            return null
           }
         }
 
         setIfcExtractedData(null)
         setIfcExtractError(msg)
+        return null
       } finally {
         setIfcExtractBusy(false)
       }
@@ -393,141 +395,29 @@ export default function ChatbotWidget() {
       setMessages((m) => [...m, { id: assistantId, role: "assistant", text: "" }])
 
       let attachments: Array<{ type: "ifc"; file_url: string; file_name?: string }> = []
+      let extractedForRequest: IfcExtractedChatData | null = ifcExtractedData
+
       if (ifcFile) {
-        const MAX_SUPABASE_BYTES = 50_000_000
-        if (ifcFile.size > MAX_SUPABASE_BYTES) {
-          const fileUrl = (() => {
-            if (localIfcObjectUrlRef.current) return localIfcObjectUrlRef.current
-            const u = URL.createObjectURL(ifcFile)
-            localIfcObjectUrlRef.current = u
-            return u
-          })()
-          setViewerIfc(fileUrl, ifcFile.name, !msg || /\b(visualize|3d|viewer|open)\b/i.test(msg))
-          if (!ifcExtractedData || ifcExtractSource !== `file:${ifcFile.name}:${ifcFile.size}`) {
-            const buf = await ifcFile.arrayBuffer()
-            await extractIfcInBrowser({ buffer: buf, file_name: ifcFile.name, source_url: undefined, source_key: `file:${ifcFile.name}:${ifcFile.size}` })
-          }
+        const fileUrl = (() => {
+          if (localIfcObjectUrlRef.current) return localIfcObjectUrlRef.current
+          const u = URL.createObjectURL(ifcFile)
+          localIfcObjectUrlRef.current = u
+          return u
+        })()
 
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId
-                ? {
-                    ...m,
-                    text:
-                      "Your IFC file is larger than 50 MB, so it will not be uploaded to Supabase.\n\nIt is loaded locally in your browser for 3D visualization. You can also paste a public IFC URL (direct raw link) to share a model.",
-                  }
-                : m,
-            ),
-          )
-          setLoading(false)
-          return
+        setViewerIfc(fileUrl, ifcFile.name, !msg || /\b(visualize|3d|viewer|open)\b/i.test(msg))
+        setMessages((prev) => prev.map((m) => (m.id === userMsg.id ? { ...m, attachedFile: { ...m.attachedFile!, url: fileUrl } } : m)))
+
+        const key = `file:${ifcFile.name}:${ifcFile.size}`
+        if (!extractedForRequest || ifcExtractSource !== key) {
+          const buf = await ifcFile.arrayBuffer()
+          extractedForRequest = await extractIfcInBrowser({ buffer: buf, file_name: ifcFile.name, source_url: undefined, source_key: key })
         }
-
-        const uploadStarted = Date.now()
-        console.log("IFC_UPLOAD_START", { name: ifcFile.name, size: ifcFile.size })
-        let fileUrl: string | null = null
-
-        // Vercel limits multipart uploads to API routes; use signed upload for larger files
-        if (ifcFile.size > 4_000_000) {
-          try {
-            const createRes = await fetch("/api/visualize-ifc", {
-              method: "POST",
-              headers: { ...headers(), "content-type": "application/json" },
-              body: JSON.stringify({ action: "create_upload_url", file_name: ifcFile.name }),
-            })
-            const createJson = await createRes.json().catch(() => null)
-            if (!createRes.ok || !createJson?.ok || !createJson?.upload_url || !createJson?.object_path) {
-              throw new Error(String(createJson?.error ?? "Failed to create signed upload URL"))
-            }
-
-            const putRes = await fetch(String(createJson.upload_url), {
-              method: "PUT",
-              body: ifcFile,
-              headers: { "content-type": "application/octet-stream" },
-            })
-            if (!putRes.ok) {
-              throw new Error(`Signed upload failed (${putRes.status})`)
-            }
-
-            const dlRes = await fetch("/api/visualize-ifc", {
-              method: "POST",
-              headers: { ...headers(), "content-type": "application/json" },
-              body: JSON.stringify({ action: "create_download_url", object_path: String(createJson.object_path) }),
-            })
-            const dlJson = await dlRes.json().catch(() => null)
-            if (!dlRes.ok || !dlJson?.ok || !dlJson?.file_url) {
-              throw new Error(String(dlJson?.error ?? "Failed to create signed download URL"))
-            }
-            fileUrl = String(dlJson.file_url)
-          } catch (e: any) {
-            const err = String(e?.message ?? "IFC upload failed")
-            setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, text: `Upload failed: ${err}` } : m)))
-            setIfcFile(null)
-            setLoading(false)
-            return
-          }
-        } else {
-          const fd = new FormData()
-          fd.append("file", ifcFile)
-          const up = await fetch("/api/visualize-ifc", {
-            method: "POST",
-            headers: { "x-client-id": clientId, ...(getUserIdHeader() ? { "x-user-id": getUserIdHeader()! } : {}) },
-            body: fd,
-          })
-          const upJson = await up.json().catch(() => null)
-          console.log("IFC_UPLOAD_DONE", { ok: up.ok, ms: Date.now() - uploadStarted, error: upJson?.error_code ?? upJson?.error ?? null })
-          if (up.status === 413) {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId
-                  ? { ...m, text: "Upload failed: IFC is too large for this upload method. Please retry; the app will use a signed upload automatically." }
-                  : m,
-              ),
-            )
-            setIfcFile(null)
-            setLoading(false)
-            return
-          }
-          if (!up.ok || !upJson?.ok || !upJson?.file_url) {
-            const err = String(upJson?.error ?? "IFC upload failed")
-            setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, text: `Upload failed: ${err}` } : m)))
-            setIfcFile(null)
-            setLoading(false)
-            return
-          }
-          fileUrl = String(upJson.file_url)
-        }
-
-        attachments.push({ type: "ifc", file_url: fileUrl, file_name: ifcFile.name })
-
-        try {
-          localStorage.setItem("seismic_ifc_model_url", JSON.stringify({ url: fileUrl, file_name: ifcFile.name }))
-        } catch {}
-
-        window.dispatchEvent(
-          new CustomEvent("seismic-ifc-model", {
-            detail: { ok: true, model_url: fileUrl, file_name: ifcFile.name },
-          }),
-        )
-        if (!msg || /\b(visualize|3d|viewer|open)\b/i.test(msg)) {
-          window.dispatchEvent(new CustomEvent("seismic-navigate", { detail: { page: "3d-viz" } }))
-        }
-
-        // Update user message with the real URL
-        setMessages((prev) =>
-          prev.map((m) => (m.id === userMsg.id ? { ...m, attachedFile: { ...m.attachedFile!, url: fileUrl } } : m)),
-        )
 
         setIfcFile(null)
 
         if (!msg) {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId
-                ? { ...m, text: "IFC received. Opening the 3D Visualizer now." }
-                : m,
-            ),
-          )
+          setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, text: "IFC loaded locally. Opening the 3D Visualizer now." } : m)))
           setLoading(false)
           refreshSessions()
           return
@@ -555,7 +445,7 @@ export default function ChatbotWidget() {
         setViewerIfc(validated, fileName, true)
         if (!ifcExtractedData || ifcExtractSource !== `url:${validated}`) {
           const buf = await fetch(validated).then((r) => r.arrayBuffer())
-          await extractIfcInBrowser({ buffer: buf, file_name: fileName, source_url: validated, source_key: `url:${validated}` })
+          extractedForRequest = await extractIfcInBrowser({ buffer: buf, file_name: fileName, source_url: validated, source_key: `url:${validated}` })
         }
         setPublicIfcUrl("")
 
@@ -579,7 +469,7 @@ export default function ChatbotWidget() {
           message: msg || "Visualize this IFC file",
           conversation_id: activeSession,
           attachments,
-          ifc_extracted_data: ifcExtractedData ?? undefined,
+          ifc_extracted_data: extractedForRequest ?? ifcExtractedData ?? undefined,
           context
         }),
       })
@@ -909,36 +799,6 @@ export default function ChatbotWidget() {
                           setIfcFile(null)
                           return
                         }
-                        const MAX_SUPABASE_BYTES = 50_000_000
-                        if (f.size > MAX_SUPABASE_BYTES) {
-                          setIfcFile(f)
-                          if (localIfcObjectUrlRef.current) {
-                            try {
-                              URL.revokeObjectURL(localIfcObjectUrlRef.current)
-                            } catch {}
-                            localIfcObjectUrlRef.current = null
-                          }
-                          const u = URL.createObjectURL(f)
-                          localIfcObjectUrlRef.current = u
-                          setPublicIfcUrlError(null)
-                          setIfcExtractedData(null)
-                          setIfcExtractError(null)
-                          setIfcExtractSource(null)
-                          setViewerIfc(u, f.name, true)
-                          f.arrayBuffer()
-                            .then((buf) => extractIfcInBrowser({ buffer: buf, file_name: f.name, source_url: undefined, source_key: `file:${f.name}:${f.size}` }))
-                            .catch(() => {})
-                          setMessages((m) => [
-                            ...m,
-                            {
-                              id: uid(),
-                              role: "assistant",
-                              text:
-                                "Your IFC file is larger than 50 MB, so it will not be uploaded to Supabase.\n\nIt has been loaded locally in your browser for 3D visualization. You can also paste a public IFC URL (direct raw .ifc link) below.",
-                            },
-                          ])
-                          return
-                        }
                         setIfcFile(f)
                         setIfcExtractedData(null)
                         setIfcExtractError(null)
@@ -949,6 +809,9 @@ export default function ChatbotWidget() {
                           } catch {}
                           localIfcObjectUrlRef.current = null
                         }
+                        const u = URL.createObjectURL(f)
+                        localIfcObjectUrlRef.current = u
+                        setViewerIfc(u, f.name, true)
                         f.arrayBuffer()
                           .then((buf) => extractIfcInBrowser({ buffer: buf, file_name: f.name, source_url: undefined, source_key: `file:${f.name}:${f.size}` }))
                           .catch(() => {})

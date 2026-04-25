@@ -1,4 +1,4 @@
-import { IfcAPI, IFCSLAB, IFCWALL, IFCWALLSTANDARDCASE, IFCDOOR, IFCWINDOW, IFCCOLUMN, IFCBEAM, IFCSPACE, IFCBUILDINGSTOREY } from "web-ifc"
+import { IfcParser, extractQuantitiesOnDemand, type IfcDataStore } from "@ifc-lite/parser"
 
 export type IfcExtractedChatData = {
   schema: "ifc-extract-v1"
@@ -20,88 +20,29 @@ export type IfcExtractedChatData = {
   }
 }
 
-function toRefValue(v: any): number | null {
-  if (!v) return null
-  if (typeof v === "number") return v
-  if (typeof v === "object" && typeof v.value === "number") return v.value
-  return null
-}
-
-function safeName(v: any): string | null {
-  const n = v?.value ?? v
-  return typeof n === "string" ? n : null
-}
-
-function numValue(v: any): number | null {
-  const n = v?.value ?? v
-  return typeof n === "number" && Number.isFinite(n) ? n : null
-}
-
-async function initIfcApi() {
-  const api = new IfcAPI()
-  api.SetWasmPath("/wasm/", true)
-  await api.Init()
-  return api
-}
-
-function countByType(api: IfcAPI, modelID: number) {
-  const types: Array<[number, string]> = [
-    [IFCWALL, "IFCWALL"],
-    [IFCWALLSTANDARDCASE, "IFCWALLSTANDARDCASE"],
-    [IFCSLAB, "IFCSLAB"],
-    [IFCDOOR, "IFCDOOR"],
-    [IFCWINDOW, "IFCWINDOW"],
-    [IFCCOLUMN, "IFCCOLUMN"],
-    [IFCBEAM, "IFCBEAM"],
-    [IFCSPACE, "IFCSPACE"],
-    [IFCBUILDINGSTOREY, "IFCBUILDINGSTOREY"],
-  ]
-
-  const byType: Record<string, number> = {}
-  let total = 0
-  for (const [t, name] of types) {
-    const ids = api.GetLineIDsWithType(modelID, t)
-    byType[name] = ids?.size?.() ? ids.size() : 0
-    total += byType[name] || 0
+function getIds(store: IfcDataStore, keys: string[]) {
+  for (const k of keys) {
+    const ids = store.entityIndex.byType.get(k)
+    if (Array.isArray(ids)) return ids
   }
-  return { byType, total }
+  return [] as number[]
 }
 
-function extractTotalFloorAreaFromSpaces(api: IfcAPI, modelID: number) {
-  const spaceIDs = api.GetLineIDsWithType(modelID, IFCSPACE)
-  const ids: number[] = []
-  if (spaceIDs?.size?.()) for (let i = 0; i < spaceIDs.size(); i++) ids.push(spaceIDs.get(i))
-
+function computeTotalFloorAreaFromSpaces(store: IfcDataStore) {
+  const spaceIds = getIds(store, ["IFCSPACE", "IfcSpace"])
   let total = 0
   let foundAny = false
 
-  for (const id of ids) {
-    const space: any = api.GetLine(modelID, id, false)
-    const isDefinedBy: any[] = Array.isArray(space?.IsDefinedBy) ? space.IsDefinedBy : []
-    for (const relRef of isDefinedBy) {
-      const relId = toRefValue(relRef)
-      if (!relId) continue
-      const rel: any = api.GetLine(modelID, relId, false)
-      const propDefId = toRefValue(rel?.RelatingPropertyDefinition)
-      if (!propDefId) continue
-      const propDef: any = api.GetLine(modelID, propDefId, false)
-
-      const quantities: any[] = Array.isArray(propDef?.Quantities) ? propDef.Quantities : []
-      for (const qRef of quantities) {
-        const qId = toRefValue(qRef)
-        if (!qId) continue
-        const q: any = api.GetLine(modelID, qId, false)
-        const qName = (safeName(q?.Name) || "").toLowerCase()
-        const isAreaLike =
-          qName.includes("grossfloorarea") ||
-          qName.includes("netfloorarea") ||
-          qName.includes("floorarea") ||
-          qName.includes("area")
+  for (const id of spaceIds) {
+    const qsets = extractQuantitiesOnDemand(store, id)
+    for (const qs of qsets) {
+      for (const q of qs.quantities) {
+        const name = String(q.name ?? "").toLowerCase()
+        const isAreaLike = name.includes("gross") || name.includes("net") || name.includes("floor") || name.includes("area")
         if (!isAreaLike) continue
-
-        const area = numValue(q?.AreaValue) ?? numValue(q?.NominalValue) ?? numValue(q?.LengthValue)
-        if (area == null) continue
-        total += area
+        const v = Number(q.value)
+        if (!Number.isFinite(v) || v <= 0) continue
+        total += v
         foundAny = true
       }
     }
@@ -111,30 +52,51 @@ function extractTotalFloorAreaFromSpaces(api: IfcAPI, modelID: number) {
 }
 
 export async function extractIfcForChat(args: { buffer: ArrayBuffer; file_name?: string; source_url?: string }): Promise<IfcExtractedChatData> {
-  const api = await initIfcApi()
-  let modelID = -1
-  try {
-    const data = new Uint8Array(args.buffer)
-    modelID = api.OpenModel(data)
+  const parser = new IfcParser()
+  const store = await parser.parseColumnar(args.buffer)
 
-    const { byType, total } = countByType(api, modelID)
-    const totalFloorArea = extractTotalFloorAreaFromSpaces(api, modelID)
+  const byType: Record<string, number> = {}
+  const typeKeys: Array<[string, string[]]> = [
+    ["IFCWALL", ["IFCWALL", "IFCWALLSTANDARDCASE", "IfcWall", "IfcWallStandardCase"]],
+    ["IFCSLAB", ["IFCSLAB", "IfcSlab"]],
+    ["IFCDOOR", ["IFCDOOR", "IfcDoor"]],
+    ["IFCWINDOW", ["IFCWINDOW", "IfcWindow"]],
+    ["IFCCOLUMN", ["IFCCOLUMN", "IfcColumn"]],
+    ["IFCBEAM", ["IFCBEAM", "IfcBeam"]],
+    ["IFCFOOTING", ["IFCFOOTING", "IfcFooting"]],
+    ["IFCSPACE", ["IFCSPACE", "IfcSpace"]],
+    ["IFCBUILDINGSTOREY", ["IFCBUILDINGSTOREY", "IfcBuildingStorey"]],
+  ]
 
-    return {
-      schema: "ifc-extract-v1",
-      file_name: args.file_name,
-      source_url: args.source_url,
-      stats: { total_elements: total, by_type: byType },
-      quantities: { total_floor_area_m2: totalFloorArea },
-    }
-  } finally {
-    if (modelID >= 0) {
-      try {
-        api.CloseModel(modelID)
-      } catch {}
-    }
-    try {
-      api.Dispose()
-    } catch {}
+  let total = 0
+  for (const [label, keys] of typeKeys) {
+    const ids = getIds(store, keys)
+    byType[label] = ids.length
+    total += ids.length
+  }
+
+  const totalFloorArea = computeTotalFloorAreaFromSpaces(store)
+
+  const warnings: string[] = []
+  if (store.fileSize >= 50 * 1024 * 1024) warnings.push(`Large IFC file (${(store.fileSize / 1_048_576).toFixed(1)} MB). Extraction may take longer.`)
+
+  return {
+    schema: "ifc-extract-v1",
+    file_name: args.file_name,
+    source_url: args.source_url,
+    stats: { total_elements: total, by_type: byType },
+    quantities: { total_floor_area_m2: totalFloorArea },
+    lite_summary: {
+      warnings,
+      location: null,
+      building: null,
+      counts: {
+        columns: byType.IFCCOLUMN ?? 0,
+        beams: byType.IFCBEAM ?? 0,
+        footings: byType.IFCFOOTING ?? 0,
+        walls: byType.IFCWALL ?? 0,
+      },
+      materials: [],
+    },
   }
 }
