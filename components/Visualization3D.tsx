@@ -224,11 +224,28 @@ export function Visualization3D({ initialComplianceResult = null as ComplianceRe
       if (!t?.scene || !t?.THREE) return
 
       setStatus(loadSimplified ? "Loading simplified model (first floor)…" : "Loading IFC model…")
+
+      try {
+        const wasmRes = await fetch("/wasm/web-ifc.wasm", { method: "GET" })
+        const ct = (wasmRes.headers.get("content-type") || "").toLowerCase()
+        if (!wasmRes.ok || ct.includes("text/html")) {
+          setStatus(
+            `web-ifc wasm is not being served correctly from /wasm/web-ifc.wasm (status ${wasmRes.status}, content-type ${ct || "unknown"}). Ensure public/wasm/web-ifc.wasm exists and restart the dev server.`,
+          )
+          return
+        }
+      } catch {
+        setStatus("Unable to verify /wasm/web-ifc.wasm. Ensure it exists under public/wasm/ and try again.")
+        return
+      }
+
       const { IFCLoader } = await import("three/examples/jsm/loaders/IFCLoader.js")
 
       const loader = new IFCLoader()
-      loader.ifcManager.setWasmPath("/wasm/")
-      // For simplified loading, hide all but first storey
+// Get the current port dynamically
+const wasmPath = `${window.location.origin}/wasm/`
+loader.ifcManager.setWasmPath(wasmPath)
+console.log("WASM path set to:", wasmPath)      // For simplified loading, hide all but first storey
       if (loadSimplified) {
         loader.ifcManager.listener = () => {
           // Will be populated with filtering logic

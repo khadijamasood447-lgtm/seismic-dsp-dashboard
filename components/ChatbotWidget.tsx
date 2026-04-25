@@ -245,8 +245,52 @@ export default function ChatbotWidget() {
         const extracted = await mod.extractIfcForChat({ buffer: args.buffer, file_name: args.file_name, source_url: args.source_url })
         setIfcExtractedData(extracted)
       } catch (e: any) {
+        const msg = String(e?.message ?? "IFC extraction failed")
+        const looksLikeWasmFailure = /wasm|webassembly|aborted\(|mime type|unsupported mime/i.test(msg)
+
+        if (looksLikeWasmFailure) {
+          try {
+            const MAX_LITE_BYTES = 10_000_000
+            if (args.buffer.byteLength > MAX_LITE_BYTES) throw new Error("IFC is too large for fallback extraction.")
+            const dec = new TextDecoder("utf-8")
+            const text = dec.decode(new Uint8Array(args.buffer))
+            const liteMod = await import("@/lib/ifc-lite")
+            const lite = liteMod.parseIfcLite(text)
+            const extracted: IfcExtractedChatData = {
+              schema: "ifc-extract-v1",
+              file_name: args.file_name,
+              source_url: args.source_url,
+              stats: {
+                total_elements:
+                  (lite.counts?.columns ?? 0) + (lite.counts?.beams ?? 0) + (lite.counts?.footings ?? 0) + (lite.counts?.walls ?? 0),
+                by_type: {
+                  IFCCOLUMN: lite.counts?.columns ?? 0,
+                  IFCBEAM: lite.counts?.beams ?? 0,
+                  IFCFOOTING: lite.counts?.footings ?? 0,
+                  IFCWALL: lite.counts?.walls ?? 0,
+                },
+              },
+              quantities: { total_floor_area_m2: null },
+              lite_summary: {
+                warnings: lite.warnings,
+                location: lite.location,
+                building: lite.building,
+                counts: lite.counts,
+                materials: lite.materials,
+              },
+            }
+            setIfcExtractedData(extracted)
+            setIfcExtractError(`web-ifc WASM failed to load; using limited fallback extraction.`)
+            return
+          } catch (fallbackErr: any) {
+            setIfcExtractedData(null)
+            setIfcExtractError(`${msg} (fallback failed: ${String(fallbackErr?.message ?? fallbackErr)})`)
+            return
+          }
+        }
+
         setIfcExtractedData(null)
-        setIfcExtractError(String(e?.message ?? "IFC extraction failed"))
+        setIfcExtractError(msg)
       } finally {
         setIfcExtractBusy(false)
       }

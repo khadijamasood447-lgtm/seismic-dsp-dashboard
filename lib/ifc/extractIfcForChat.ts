@@ -11,6 +11,13 @@ export type IfcExtractedChatData = {
   quantities: {
     total_floor_area_m2: number | null
   }
+  lite_summary?: {
+    warnings: string[]
+    location: { lat: number; lon: number } | null
+    building: { name?: string; height_m?: number | null } | null
+    counts: { columns: number; beams: number; footings: number; walls: number } | null
+    materials: string[]
+  }
 }
 
 function toRefValue(v: any): number | null {
