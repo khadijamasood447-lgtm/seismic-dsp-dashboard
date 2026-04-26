@@ -67,7 +67,12 @@ export async function POST(req: Request) {
     if (!message) return NextResponse.json({ ok: false, error: 'Message is required', reqId }, { status: 400 })
 
     const anthropicKey = process.env.ANTHROPIC_API_KEY
-    const anthropicModel = process.env.ANTHROPIC_MODEL || 'claude-3-sonnet-20241022'
+    const configuredModel = process.env.ANTHROPIC_MODEL
+    const modelCandidates = [
+      configuredModel,
+      'claude-sonnet-4-20250514',
+      'claude-opus-4-20250514',
+    ].filter(Boolean) as string[]
 
     if (!anthropicKey) {
       console.error('CHAT_STREAM_MISSING_ANTHROPIC_KEY', { reqId })
@@ -164,33 +169,48 @@ export async function POST(req: Request) {
     // 2. Call Anthropic with streaming
     const ctrl = new AbortController()
     const timeout = setTimeout(() => ctrl.abort(), 25_000)
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      signal: ctrl.signal,
-      headers: {
-        'content-type': 'application/json',
-        'anthropic-version': '2023-06-01',
-        'x-api-key': anthropicKey,
-      },
-      body: JSON.stringify({
-        model: anthropicModel,
-        max_tokens: 1500,
-        temperature: 0.2,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: message }],
-        stream: true,
-      }),
-    })
-    clearTimeout(timeout)
+    const callAnthropic = async (model: string) => {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        signal: ctrl.signal,
+        headers: {
+          'content-type': 'application/json',
+          'anthropic-version': '2023-06-01',
+          'x-api-key': anthropicKey,
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1500,
+          temperature: 0.2,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: message }],
+          stream: true,
+        }),
+      })
+      return r
+    }
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => '')
+    let response: Response | null = null
+    let lastErrorText = ''
+    for (const model of modelCandidates) {
+      response = await callAnthropic(model)
+      if (response.ok) break
+      lastErrorText = await response.text().catch(() => '')
+      const isModelNotFound = response.status === 404 && /model:/i.test(lastErrorText)
       console.error('CHAT_STREAM_ANTHROPIC_ERROR', {
         reqId,
         status: response.status,
-        body_preview: String(errorText).slice(0, 800),
+        model,
+        body_preview: String(lastErrorText).slice(0, 800),
       })
-      throw new Error(`Anthropic error (${response.status}): ${String(errorText).slice(0, 500)}`)
+      if (!isModelNotFound) break
+    }
+    clearTimeout(timeout)
+
+    if (!response || !response.ok) {
+      const status = response?.status ?? 0
+      const errorText = lastErrorText || (await response?.text().catch(() => '')) || ''
+      throw new Error(`Anthropic error (${status}): ${String(errorText).slice(0, 500)}`)
     }
 
     // 3. Setup streaming response

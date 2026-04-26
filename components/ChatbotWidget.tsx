@@ -54,7 +54,9 @@ function getClientId() {
 
 function getActiveSessionId() {
   try {
-    return localStorage.getItem("vs_chat_conversation_id") || ""
+    const v = localStorage.getItem("vs_chat_conversation_id") || ""
+    if (v === "undefined" || v === "null") return ""
+    return v
   } catch {
     return ""
   }
