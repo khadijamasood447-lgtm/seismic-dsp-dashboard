@@ -56,9 +56,15 @@ export async function POST(req: Request) {
     const context = body?.context
     const ifc_extracted_data = safeJsonParse(body?.ifc_extracted_data)
 
-    if (!message) {
-      return NextResponse.json({ ok: false, error: 'Message is required' }, { status: 400 })
-    }
+    console.log('CHAT_STREAM_BODY_KEYS', {
+      reqId,
+      method: 'POST',
+      url: req.url,
+      keys: body && typeof body === 'object' ? Object.keys(body) : [],
+      has_ifc_extracted_data: Boolean(body?.ifc_extracted_data),
+    })
+
+    if (!message) return NextResponse.json({ ok: false, error: 'Message is required', reqId }, { status: 400 })
 
     const anthropicKey = process.env.ANTHROPIC_API_KEY
     const anthropicModel = process.env.ANTHROPIC_MODEL || 'claude-3-sonnet-20241022'
@@ -254,7 +260,11 @@ export async function POST(req: Request) {
 
   } catch (error: any) {
     const msg = String(error?.message ?? 'Chat stream failed')
-    console.error('CHAT_STREAM_FATAL', { message: msg, stack: error?.stack })
+    console.error('CHAT_STREAM_FATAL', {
+      message: msg,
+      stack: error?.stack,
+      name: error?.name,
+    })
     return NextResponse.json({ ok: false, error: msg }, { status: 500 })
   }
 }

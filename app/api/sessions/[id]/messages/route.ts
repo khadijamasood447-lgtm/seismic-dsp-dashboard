@@ -12,11 +12,29 @@ function getClientId(req: Request) {
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const sessionId = String(params.id ?? '').trim()
-  if (!sessionId) return NextResponse.json({ ok: false, error: 'Missing session id' }, { status: 400 })
+  const clientId = getClientId(req)
+  const userId = getUserIdFromHeaders(req)
+
+  console.log('SESSION_MESSAGES_REQUEST', {
+    method: 'GET',
+    url: req.url,
+    session_id: sessionId,
+    has_user_id: Boolean(userId),
+    has_client_id: Boolean(clientId),
+  })
+
+  if (!sessionId) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: 'Missing session id',
+        details: { hint: 'Request path should be /api/sessions/{id}/messages', session_id: sessionId },
+      },
+      { status: 400 },
+    )
+  }
 
   try {
-    const userId = getUserIdFromHeaders(req)
-    const clientId = getClientId(req)
     const messages = await listChatMessages(sessionId, { user_id: userId, client_id: clientId })
     return NextResponse.json({ ok: true, messages })
   } catch (e: any) {
@@ -25,4 +43,14 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     console.error('SESSION_MESSAGES_GET_FAILED', { session_id: sessionId, error_type, message: msg })
     return NextResponse.json({ ok: false, error: msg, error_type }, { status: 200 })
   }
+}
+
+export async function POST(req: Request, { params }: { params: { id: string } }) {
+  const sessionId = String(params.id ?? '').trim()
+  let body: any = null
+  try {
+    body = await req.clone().json()
+  } catch {}
+  console.log('SESSION_MESSAGES_UNSUPPORTED_METHOD', { method: 'POST', url: req.url, session_id: sessionId, body_keys: body ? Object.keys(body) : [] })
+  return NextResponse.json({ ok: false, error: 'Method not allowed' }, { status: 405 })
 }
