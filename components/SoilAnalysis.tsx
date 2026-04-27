@@ -126,6 +126,11 @@ export function SoilAnalysis() {
     return isNaN(numValue) ? 0 : numValue;
   };
 
+  const clampVs2m = (v: any): number | null => {
+    if (typeof v !== 'number' || isNaN(v)) return null
+    return Math.min(200, Math.max(100, v))
+  }
+
   useEffect(() => {
     const initializeMap = async () => {
       try {
@@ -281,6 +286,9 @@ export function SoilAnalysis() {
             setSelectedSite('');
 
             const shearModulusDisplay = typeof gmaxPred === 'number' ? Math.round(gmaxPred) : (typeof gMpa === 'number' ? Math.round(gMpa) : 0)
+            const vs2 = shallow && typeof shallow === 'object' ? clampVs2m((shallow as any)['2']) : null
+            const vsDisplay = typeof vs2 === 'number' ? vs2 : (typeof vsPred === 'number' ? vsPred : 0)
+
             const soilData: SoilData = {
               location: `Lon ${lon.toFixed(4)}, Lat ${lat.toFixed(4)}`,
               shearModulus: shearModulusDisplay,
@@ -288,7 +296,7 @@ export function SoilAnalysis() {
               gmaxP10,
               gmaxP90,
               gmaxStd,
-              liquefactionFactor: typeof vsPred === 'number' ? vsPred : 0,
+              liquefactionFactor: vsDisplay,
               vs30: typeof vs30 === 'number' ? vs30 : 0,
               shallowVsByDepth: shallow && typeof shallow === 'object' ? shallow : {},
               pWaveVelocity: typeof vpPred === 'number' ? vpPred : 0,
@@ -472,6 +480,9 @@ export function SoilAnalysis() {
       setSelectedSite('');
 
       const shearModulusDisplay = typeof gmaxPred === 'number' ? Math.round(gmaxPred) : (typeof gMpa === 'number' ? Math.round(gMpa) : 0)
+      const vs2 = shallow && typeof shallow === 'object' ? clampVs2m((shallow as any)['2']) : null
+      const vsDisplay = typeof vs2 === 'number' ? vs2 : (typeof vsPred === 'number' ? vsPred : 0)
+
       const soilData: SoilData = {
         location: `Lon ${lon.toFixed(4)}, Lat ${lat.toFixed(4)}`,
         shearModulus: shearModulusDisplay,
@@ -479,7 +490,7 @@ export function SoilAnalysis() {
         gmaxP10,
         gmaxP90,
         gmaxStd,
-        liquefactionFactor: typeof vsPred === 'number' ? vsPred : 0,
+        liquefactionFactor: vsDisplay,
         vs30: typeof vs30 === 'number' ? vs30 : 0,
         shallowVsByDepth: shallow && typeof shallow === 'object' ? shallow : {},
         pWaveVelocity: typeof vpPred === 'number' ? vpPred : 0,

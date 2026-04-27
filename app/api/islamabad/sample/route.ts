@@ -6,6 +6,11 @@ import { sampleAoiPredictions } from '@/lib/aoiPredictions'
 
 export const dynamic = 'force-dynamic'
 
+function clampVs2m(v: number | null) {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return null
+  return Math.min(200, Math.max(100, v))
+}
+
 export async function GET(req: Request) {
   const reqId = `sample_${Date.now()}_${Math.random().toString(16).slice(2)}`
   try {
@@ -35,7 +40,7 @@ export async function GET(req: Request) {
     const shallowVsBase = typeof sample.layers?.pred_vs_sw === 'number' ? sample.layers.pred_vs_sw : null
     const vs_by_depth_m_s: Record<string, number | null> = {
       '1': shallowVsBase,
-      '2': shallowVsBase,
+      '2': clampVs2m(shallowVsBase),
     }
 
   const warning =
