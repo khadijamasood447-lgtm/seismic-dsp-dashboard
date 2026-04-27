@@ -816,7 +816,7 @@ export function SoilAnalysis() {
                         strokeWidth="6"
                         fill="none"
                         strokeLinecap="round"
-                        strokeDasharray={`${(Math.min(500, Math.max(0, data.shearModulus)) / 500) * 219.8} 219.8`}
+                        strokeDasharray={`${(Math.min(200, Math.max(0, data.shearModulus)) / 200) * 219.8} 219.8`}
                       />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -825,7 +825,7 @@ export function SoilAnalysis() {
                     </div>
                   </div>
                 </div>
-                <div className="mt-1 text-xs text-gray-600 text-center">0–500 MPa</div>
+                <div className="mt-1 text-xs text-gray-600 text-center">0–200 MPa</div>
                 {typeof data.gmaxPred === 'number' && (
                   <div className="mt-1 text-[11px] text-gray-600 text-center">
                     80% PI: {safeToFixed(data.gmaxP10, 1)}–{safeToFixed(data.gmaxP90, 1)} MPa

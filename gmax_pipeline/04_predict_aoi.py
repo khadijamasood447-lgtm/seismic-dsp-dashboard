@@ -91,7 +91,7 @@ def main(argv: Iterable[str] | None = None) -> int:
   ap.add_argument("--model", default=str(REPO_ROOT / "outputs" / "models" / "model_ensemble_5_vs30weak.pkl"))
   ap.add_argument("--template", default=str(REPO_ROOT / "ISLAMABD DATA" / "sand content.tif"))
   ap.add_argument("--min_gmax", type=float, default=1.0)
-  ap.add_argument("--max_gmax", type=float, default=500.0)
+  ap.add_argument("--max_gmax", type=float, default=200.0)
   args = ap.parse_args(list(argv) if argv is not None else None)
 
   outputs_dir = Path(args.outputs_dir).resolve()

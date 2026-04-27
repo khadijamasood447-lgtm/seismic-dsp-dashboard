@@ -13,6 +13,21 @@ export type AoiPredictionRow = {
   [k: string]: number | string | null | undefined
 }
 
+const MAX_GMAX_MPA = 200
+
+function clampGmaxRow(row: AoiPredictionRow): AoiPredictionRow {
+  const clamp = (v: any) => {
+    const n = Number(v)
+    if (!Number.isFinite(n)) return v
+    return n > MAX_GMAX_MPA ? MAX_GMAX_MPA : n
+  }
+  const gmax_mpa_predicted = clamp((row as any).gmax_mpa_predicted)
+  const gmax_mpa_p10 = clamp((row as any).gmax_mpa_p10)
+  const gmax_mpa_p90 = clamp((row as any).gmax_mpa_p90)
+  const gmax_mpa_std = clamp((row as any).gmax_mpa_std)
+  return { ...row, gmax_mpa_predicted, gmax_mpa_p10, gmax_mpa_p90, gmax_mpa_std }
+}
+
 type Index = {
   minLon: number
   minLat: number
@@ -159,9 +174,8 @@ export async function sampleAoiPredictions(lon: number, lat: number): Promise<Ao
     }
 
     if (!best) return { ok: false, error: 'No nearby prediction found' }
-    return { ok: true, inBounds: true, nearest: best, approx_distance_m: bestD }
+    return { ok: true, inBounds: true, nearest: clampGmaxRow(best), approx_distance_m: bestD }
   } catch (e: any) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
   }
 }
-

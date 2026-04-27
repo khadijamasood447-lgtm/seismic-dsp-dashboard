@@ -15,6 +15,7 @@ import { insertChatMessage, upsertChatSession } from '@/lib/supabase/app-data'
 import { getOrCachePrediction, vs30ToSiteClass } from '@/lib/prediction-cache'
 import { formatComparisonAsText, formatLocationDataAsText, formatSoilCompositionAsText } from '@/lib/response-formatter'
 import { sampleAoiPredictions } from '@/lib/aoiPredictions'
+import { getSectorCentroid, normalizeSector } from '@/lib/islamabadSectorCentroids'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -286,9 +287,10 @@ function toolDefs() {
         properties: {
           lat: { type: 'number' },
           lon: { type: 'number' },
+          sector: { type: 'string' },
           pga_g: { type: 'number' },
         },
-        required: ['lat', 'lon'],
+        required: [],
       },
     },
     {
@@ -364,11 +366,15 @@ async function runTool(name: string, input: any) {
   }
 
   if (name === 'get_site_data') {
-    const lat = Number(input?.lat)
-    const lon = Number(input?.lon)
+    let lat = Number(input?.lat)
+    let lon = Number(input?.lon)
     const pga = Number(input?.pga_g)
+    const sector = String(input?.sector ?? '').trim()
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-      return { ok: false, error: 'Invalid lat/lon' }
+      const c = sector ? getSectorCentroid(sector) : null
+      if (!c) return { ok: false, error: 'Provide lat/lon or a known sector like G-6 or I-8.' }
+      lat = c.lat
+      lon = c.lon
     }
 
     const depths = [1, 2, 3, 5]
@@ -410,7 +416,7 @@ async function runTool(name: string, input: any) {
 
     return {
       ok: true,
-      input: { lat, lon, pga_g: Number.isFinite(pga) ? pga : null },
+      input: { lat, lon, sector: normalizeSector(sector) ?? null, pga_g: Number.isFinite(pga) ? pga : null },
       vs_by_depth: vsByDepth,
       vs30_m_s: vs30,
       site_class: siteClass,
@@ -420,7 +426,9 @@ async function runTool(name: string, input: any) {
         'PRELIMINARY / SCREENING-LEVEL: not for final design without site-specific investigation.',
         'Shallow Vs (1-5 m) does not replace Vs30 measurement; use geotechnical testing for design.',
       ],
-      notes: notePga ? [notePga] : [],
+      notes: (notePga ? [notePga] : []).concat(
+        normalizeSector(sector) ? ['Sector sampling uses an approximate centroid if lat/lon was not provided.'] : [],
+      ),
       citations: [{ doc: 'bcp-sp-2021', table: '6-1', section: 'Soil / Site Classification' }],
     }
   }
