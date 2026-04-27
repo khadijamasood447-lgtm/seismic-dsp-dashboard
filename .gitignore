@@ -43,3 +43,5 @@ next-env.d.ts
 /logs/
 /conversation_logs/
 
+/outputs/
+cyclic_triaxial_inventory.json

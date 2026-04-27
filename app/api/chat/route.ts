@@ -14,6 +14,7 @@ import { getUserIdFromHeaders } from '@/lib/supabase/server'
 import { insertChatMessage, upsertChatSession } from '@/lib/supabase/app-data'
 import { getOrCachePrediction, vs30ToSiteClass } from '@/lib/prediction-cache'
 import { formatComparisonAsText, formatLocationDataAsText, formatSoilCompositionAsText } from '@/lib/response-formatter'
+import { sampleAoiPredictions } from '@/lib/aoiPredictions'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -278,7 +279,7 @@ function toolDefs() {
     {
       name: 'get_site_data',
       description:
-        'Return site conditions at a location in Islamabad: shallow Vs predictions (1-5 m), uncertainty, Vs30 proxy, site class proxy, and soil properties.',
+        'Return site conditions at a location in Islamabad: shallow Vs predictions (1-5 m), Vs30 proxy, site class proxy, soil properties, and Gmax prediction at 2 m with uncertainty (p10-p90).',
       input_schema: {
         type: 'object',
         additionalProperties: false,
@@ -390,6 +391,8 @@ async function runTool(name: string, input: any) {
     const vs30 = typeof layers.vs30 === 'number' ? layers.vs30 : null
     const siteClass = vs30ToSiteClass(vs30)
 
+    const gmax = await sampleAoiPredictions(lon, lat)
+
     const soil = {
       sand_pct: typeof layers.sand_pct === 'number' ? layers.sand_pct : null,
       silt_pct: typeof layers.silt_pct === 'number' ? layers.silt_pct : null,
@@ -411,6 +414,7 @@ async function runTool(name: string, input: any) {
       vs_by_depth: vsByDepth,
       vs30_m_s: vs30,
       site_class: siteClass,
+      gmax_2m: gmax,
       soil_properties: soil,
       disclaimers: [
         'PRELIMINARY / SCREENING-LEVEL: not for final design without site-specific investigation.',

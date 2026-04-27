@@ -1,10 +1,24 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import fs from 'fs'
+import path from 'path'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const reqId = `aoi_${Date.now()}_${Math.random().toString(16).slice(2)}`
+
+  try {
+    const localPath = path.join(process.cwd(), 'outputs', 'predictions', 'aoi_polygon.geojson')
+    if (fs.existsSync(localPath)) {
+      const raw = fs.readFileSync(localPath, 'utf-8')
+      const obj = JSON.parse(raw)
+      console.log('AOI_BOUNDARY', { reqId, source: 'outputs/predictions/aoi_polygon.geojson' })
+      return NextResponse.json(obj)
+    }
+  } catch {
+    // Fall through
+  }
 
   // 1. Try to fetch from Supabase table first (if configured)
   const supabase = createSupabaseServerClient()

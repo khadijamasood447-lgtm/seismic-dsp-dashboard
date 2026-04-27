@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { sampleIslamabadGrid } from '@/lib/islamabadGrid'
 import { getPgaForSector, inferSectorFromSiteName, sampleSubbasinTables } from '@/lib/islamabadTables'
+import { sampleAoiPredictions } from '@/lib/aoiPredictions'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +26,8 @@ export async function GET(req: Request) {
 
     const sample = await sampleIslamabadGrid(lon, lat)
 
+    const gmax = await sampleAoiPredictions(lon, lat)
+
     const inferredSector = sector ?? (site ? inferSectorFromSiteName(site) : null)
     const pga = inferredSector ? getPgaForSector(inferredSector) : null
     const subbasin = sample.inBounds ? sampleSubbasinTables(lon, lat) : null
@@ -42,6 +45,7 @@ export async function GET(req: Request) {
       ok: true,
       input: { lon, lat },
       sample,
+      gmax,
       tables: { sector: inferredSector, pga, subbasin },
       shallow_vs_by_depth_m_s: vs_by_depth_m_s,
       cyclic: null,

@@ -9,6 +9,10 @@ import { Soil3DProfile } from './Soil3DProfile';
 interface SoilData {
   location: string;
   shearModulus: number;
+  gmaxPred?: number;
+  gmaxP10?: number;
+  gmaxP90?: number;
+  gmaxStd?: number;
   liquefactionFactor: number;
   vs30: number;
   shallowVsByDepth?: Record<string, number | null>;
@@ -38,6 +42,10 @@ interface SoilData {
 const defaultData: SoilData = {
   location: 'Select a site from the map',
   shearModulus: 0,
+  gmaxPred: undefined,
+  gmaxP10: undefined,
+  gmaxP90: undefined,
+  gmaxStd: undefined,
   liquefactionFactor: 0,
   vs30: 0,
   shallowVsByDepth: {},
@@ -96,6 +104,7 @@ export function SoilAnalysis() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [selectedFeature, setSelectedFeature] = useState<any>(null);
   const [mapError, setMapError] = useState<string>('');
+  const [showGmaxOverlay, setShowGmaxOverlay] = useState<boolean>(true);
 
   // Safe number conversion function that handles both numbers and strings
   const safeToFixed = (value: any, decimals: number): string => {
@@ -127,6 +136,8 @@ export function SoilAnalysis() {
         const VectorSource = await import('ol/source/Vector').then(m => m.default);
         const GeoJSON = await import('ol/format/GeoJSON').then(m => m.default);
         const OSM = await import('ol/source/OSM').then(m => m.default);
+        const WebGLTileLayer = await import('ol/layer/WebGLTile').then(m => m.default);
+        const GeoTIFF = await import('ol/source/GeoTIFF').then(m => m.default);
         const fromLonLat = await import('ol/proj').then(m => m.fromLonLat);
         const toLonLat = await import('ol/proj').then(m => m.toLonLat);
         const Style = await import('ol/style/Style').then(m => m.default);
@@ -154,12 +165,34 @@ export function SoilAnalysis() {
           ]
         });
 
+        const gmaxLayer = new WebGLTileLayer({
+          source: new GeoTIFF({
+            sources: [{ url: '/api/raster/gmax?layer=mean' }]
+          }),
+          visible: true,
+          opacity: 0.7,
+          style: {
+            color: [
+              'interpolate',
+              ['linear'],
+              ['band', 1],
+              1, [0, 0, 0, 0],
+              20, [43, 131, 186, 160],
+              60, [171, 221, 164, 180],
+              120, [253, 174, 97, 190],
+              200, [215, 25, 28, 210],
+              500, [128, 0, 38, 220],
+            ],
+          },
+        });
+
         const openMap = new Map({
           target: mapRef.current!,
           layers: [
             new TileLayer({
               source: new OSM()
             }),
+            gmaxLayer,
             boundaryLayer,
           ],
           view: new View({
@@ -169,6 +202,8 @@ export function SoilAnalysis() {
             maxZoom: 18
           })
         });
+
+        gmaxLayer.setVisible(showGmaxOverlay);
 
         boundarySource.once('change', () => {
           if (boundarySource.getState() === 'ready') {
@@ -235,13 +270,24 @@ export function SoilAnalysis() {
             const rhoKgM3 = typeof bulkDensity === 'number' ? bulkDensity * 1000 : null;
             const gMpa = typeof vsPred === 'number' && typeof rhoKgM3 === 'number' ? (rhoKgM3 * vsPred * vsPred) / 1_000_000 : null;
 
+            const gmax = json.gmax?.inBounds ? json.gmax?.nearest : null;
+            const gmaxPred = typeof gmax?.gmax_mpa_predicted === 'number' ? gmax.gmax_mpa_predicted : undefined;
+            const gmaxP10 = typeof gmax?.gmax_mpa_p10 === 'number' ? gmax.gmax_mpa_p10 : undefined;
+            const gmaxP90 = typeof gmax?.gmax_mpa_p90 === 'number' ? gmax.gmax_mpa_p90 : undefined;
+            const gmaxStd = typeof gmax?.gmax_mpa_std === 'number' ? gmax.gmax_mpa_std : undefined;
+
             setSelectedFeature(null);
             selectedFeatureRef.current = null;
             setSelectedSite('');
 
+            const shearModulusDisplay = typeof gmaxPred === 'number' ? Math.round(gmaxPred) : (typeof gMpa === 'number' ? Math.round(gMpa) : 0)
             const soilData: SoilData = {
               location: `Lon ${lon.toFixed(4)}, Lat ${lat.toFixed(4)}`,
-              shearModulus: typeof gMpa === 'number' ? Math.round(gMpa) : 0,
+              shearModulus: shearModulusDisplay,
+              gmaxPred,
+              gmaxP10,
+              gmaxP90,
+              gmaxStd,
               liquefactionFactor: typeof vsPred === 'number' ? vsPred : 0,
               vs30: typeof vs30 === 'number' ? vs30 : 0,
               shallowVsByDepth: shallow && typeof shallow === 'object' ? shallow : {},
@@ -311,6 +357,8 @@ export function SoilAnalysis() {
 
         setMap(openMap);
         mapInstanceRef.current = openMap;
+
+        (openMap as any).__gmaxLayer = gmaxLayer;
       } catch (error) {
       }
     };
@@ -327,6 +375,14 @@ export function SoilAnalysis() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    const inst = mapInstanceRef.current
+    if (!inst) return
+    const layer = (inst as any).__gmaxLayer
+    if (!layer) return
+    layer.setVisible(showGmaxOverlay)
+  }, [showGmaxOverlay])
 
   useEffect(() => {
     const onChatData = async (ev: any) => {
@@ -405,13 +461,24 @@ export function SoilAnalysis() {
       const rhoKgM3 = typeof bulkDensity === 'number' ? bulkDensity * 1000 : null;
       const gMpa = typeof vsPred === 'number' && typeof rhoKgM3 === 'number' ? (rhoKgM3 * vsPred * vsPred) / 1_000_000 : null;
 
+      const gmax = json.gmax?.inBounds ? json.gmax?.nearest : null;
+      const gmaxPred = typeof gmax?.gmax_mpa_predicted === 'number' ? gmax.gmax_mpa_predicted : undefined;
+      const gmaxP10 = typeof gmax?.gmax_mpa_p10 === 'number' ? gmax.gmax_mpa_p10 : undefined;
+      const gmaxP90 = typeof gmax?.gmax_mpa_p90 === 'number' ? gmax.gmax_mpa_p90 : undefined;
+      const gmaxStd = typeof gmax?.gmax_mpa_std === 'number' ? gmax.gmax_mpa_std : undefined;
+
       setSelectedFeature(null);
       selectedFeatureRef.current = null;
       setSelectedSite('');
 
+      const shearModulusDisplay = typeof gmaxPred === 'number' ? Math.round(gmaxPred) : (typeof gMpa === 'number' ? Math.round(gMpa) : 0)
       const soilData: SoilData = {
         location: `Lon ${lon.toFixed(4)}, Lat ${lat.toFixed(4)}`,
-        shearModulus: typeof gMpa === 'number' ? Math.round(gMpa) : 0,
+        shearModulus: shearModulusDisplay,
+        gmaxPred,
+        gmaxP10,
+        gmaxP90,
+        gmaxStd,
         liquefactionFactor: typeof vsPred === 'number' ? vsPred : 0,
         vs30: typeof vs30 === 'number' ? vs30 : 0,
         shallowVsByDepth: shallow && typeof shallow === 'object' ? shallow : {},
@@ -702,6 +769,14 @@ export function SoilAnalysis() {
               >
                 Reset View
               </Button>
+              <label className="h-10 flex items-center gap-2 px-3 border border-gray-300 rounded-md bg-gray-50 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={showGmaxOverlay}
+                  onChange={(e) => setShowGmaxOverlay(e.target.checked)}
+                />
+                Gmax overlay
+              </label>
             </div>
           </div>
         </div>
@@ -741,7 +816,7 @@ export function SoilAnalysis() {
                         strokeWidth="6"
                         fill="none"
                         strokeLinecap="round"
-                        strokeDasharray={`${(Math.min(100, Math.max(0, data.shearModulus)) / 100) * 219.8} 219.8`}
+                        strokeDasharray={`${(Math.min(500, Math.max(0, data.shearModulus)) / 500) * 219.8} 219.8`}
                       />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -750,7 +825,12 @@ export function SoilAnalysis() {
                     </div>
                   </div>
                 </div>
-                <div className="mt-1 text-xs text-gray-600 text-center">0–100 MPa</div>
+                <div className="mt-1 text-xs text-gray-600 text-center">0–500 MPa</div>
+                {typeof data.gmaxPred === 'number' && (
+                  <div className="mt-1 text-[11px] text-gray-600 text-center">
+                    80% PI: {safeToFixed(data.gmaxP10, 1)}–{safeToFixed(data.gmaxP90, 1)} MPa
+                  </div>
+                )}
               </div>
 
               {/* Bender Element */}
