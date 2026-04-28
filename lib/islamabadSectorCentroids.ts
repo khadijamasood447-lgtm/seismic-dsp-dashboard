@@ -20,10 +20,10 @@ const CENTROIDS: Record<string, SectorCentroid> = {
 }
 
 export function normalizeSector(input: string): string | null {
-  const m = String(input || '')
-    .toUpperCase()
-    .match(/\b([A-Z]-\d{1,2})\b/)
-  return m ? m[1] : null
+  const s = String(input || '').toUpperCase()
+  const m = s.match(/\b([A-Z])\s*-?\s*(\d{1,2})\b/)
+  if (!m) return null
+  return `${m[1]}-${m[2]}`
 }
 
 export function getSectorCentroid(input: string): SectorCentroid | null {
@@ -33,10 +33,10 @@ export function getSectorCentroid(input: string): SectorCentroid | null {
 }
 
 export function extractSectors(text: string): string[] {
-  const m = String(text || '').toUpperCase().match(/\b[A-Z]-\d{1,2}\b/g)
-  if (!m) return []
-  const uniq = Array.from(new Set(m))
+  const s = String(text || '').toUpperCase()
+  const matches = Array.from(s.matchAll(/\b([A-Z])\s*-?\s*(\d{1,2})\b/g)).map((m) => `${m[1]}-${m[2]}`)
+  if (!matches.length) return []
+  const uniq = Array.from(new Set(matches))
   uniq.sort()
   return uniq
 }
-
