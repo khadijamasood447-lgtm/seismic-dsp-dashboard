@@ -48,6 +48,10 @@ function parseLonLatFromText(text: string): { lon: number; lat: number } | null 
 
 async function sampleAt(lon: number, lat: number) {
   const soil = await sampleIslamabadGrid(lon, lat)
+  if (soil?.layers && typeof (soil.layers as any).bulk_density === 'number') {
+    const bd = (soil.layers as any).bulk_density
+    if (Number.isFinite(bd) && bd < 1) (soil.layers as any).bulk_density = 1
+  }
   const gmax = await sampleAoiPredictions(lon, lat)
   return { input: { lon, lat }, soil, gmax }
 }

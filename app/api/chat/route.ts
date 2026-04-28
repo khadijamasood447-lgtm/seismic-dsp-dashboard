@@ -403,7 +403,7 @@ async function runTool(name: string, input: any) {
       sand_pct: typeof layers.sand_pct === 'number' ? layers.sand_pct : null,
       silt_pct: typeof layers.silt_pct === 'number' ? layers.silt_pct : null,
       clay_pct: typeof layers.clay_pct === 'number' ? layers.clay_pct : null,
-      bulk_density_g_cm3: typeof layers.bulk_density === 'number' ? layers.bulk_density : null,
+      bulk_density_g_cm3: typeof layers.bulk_density === 'number' ? Math.max(1, layers.bulk_density) : null,
       water_content_pct: typeof layers.water_content === 'number' ? layers.water_content : null,
       dem_m: typeof layers.dem === 'number' ? layers.dem : null,
       land_cover: typeof layers.land_cover === 'number' ? layers.land_cover : null,

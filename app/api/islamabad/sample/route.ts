@@ -31,6 +31,11 @@ export async function GET(req: Request) {
 
     const sample = await sampleIslamabadGrid(lon, lat)
 
+    if (sample?.layers && typeof (sample.layers as any).bulk_density === 'number') {
+      const bd = (sample.layers as any).bulk_density
+      if (Number.isFinite(bd) && bd < 1) (sample.layers as any).bulk_density = 1
+    }
+
     const gmax = await sampleAoiPredictions(lon, lat)
 
     const inferredSector = sector ?? (site ? inferSectorFromSiteName(site) : null)

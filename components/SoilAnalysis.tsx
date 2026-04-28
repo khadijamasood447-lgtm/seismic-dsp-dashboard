@@ -131,6 +131,16 @@ export function SoilAnalysis() {
     return Math.min(200, Math.max(100, v))
   }
 
+  const clampShearModulus = (v: any): number => {
+    if (typeof v !== 'number' || isNaN(v)) return 0
+    return Math.min(50, Math.max(20, v))
+  }
+
+  const clampBulkDensity = (v: any): number | null => {
+    if (typeof v !== 'number' || isNaN(v)) return null
+    return Math.max(1, v)
+  }
+
   useEffect(() => {
     const initializeMap = async () => {
       try {
@@ -269,7 +279,8 @@ export function SoilAnalysis() {
             const vs30 = layers.vs30 ?? null;
             const shallow = json.shallow_vs_by_depth_m_s ?? null;
             const sub = json.tables?.subbasin ?? null;
-            const bulkDensity = layers.bulk_density ?? null;
+            const bulkDensityRaw = layers.bulk_density ?? null;
+            const bulkDensity = typeof bulkDensityRaw === 'number' ? clampBulkDensity(bulkDensityRaw) : null;
             const waterPct = layers.water_content ?? null;
 
             const rhoKgM3 = typeof bulkDensity === 'number' ? bulkDensity * 1000 : null;
@@ -285,7 +296,8 @@ export function SoilAnalysis() {
             selectedFeatureRef.current = null;
             setSelectedSite('');
 
-            const shearModulusDisplay = typeof gmaxPred === 'number' ? Math.round(gmaxPred) : (typeof gMpa === 'number' ? Math.round(gMpa) : 0)
+            const shearModulusDisplayRaw = typeof gmaxPred === 'number' ? gmaxPred : (typeof gMpa === 'number' ? gMpa : 0)
+            const shearModulusDisplay = clampShearModulus(Math.round(shearModulusDisplayRaw))
             const vs2 = shallow && typeof shallow === 'object' ? clampVs2m((shallow as any)['2']) : null
             const vsDisplay = typeof vs2 === 'number' ? vs2 : (typeof vsPred === 'number' ? vsPred : 0)
 
@@ -463,7 +475,8 @@ export function SoilAnalysis() {
       const vs30 = layers.vs30 ?? null;
       const shallow = json.shallow_vs_by_depth_m_s ?? null;
       const sub = json.tables?.subbasin ?? null;
-      const bulkDensity = layers.bulk_density ?? null;
+      const bulkDensityRaw = layers.bulk_density ?? null;
+      const bulkDensity = typeof bulkDensityRaw === 'number' ? clampBulkDensity(bulkDensityRaw) : null;
       const waterPct = layers.water_content ?? null;
 
       const rhoKgM3 = typeof bulkDensity === 'number' ? bulkDensity * 1000 : null;
@@ -479,7 +492,8 @@ export function SoilAnalysis() {
       selectedFeatureRef.current = null;
       setSelectedSite('');
 
-      const shearModulusDisplay = typeof gmaxPred === 'number' ? Math.round(gmaxPred) : (typeof gMpa === 'number' ? Math.round(gMpa) : 0)
+      const shearModulusDisplayRaw = typeof gmaxPred === 'number' ? gmaxPred : (typeof gMpa === 'number' ? gMpa : 0)
+      const shearModulusDisplay = clampShearModulus(Math.round(shearModulusDisplayRaw))
       const vs2 = shallow && typeof shallow === 'object' ? clampVs2m((shallow as any)['2']) : null
       const vsDisplay = typeof vs2 === 'number' ? vs2 : (typeof vsPred === 'number' ? vsPred : 0)
 
@@ -827,7 +841,7 @@ export function SoilAnalysis() {
                         strokeWidth="6"
                         fill="none"
                         strokeLinecap="round"
-                        strokeDasharray={`${(Math.min(200, Math.max(0, data.shearModulus)) / 200) * 219.8} 219.8`}
+                        strokeDasharray={`${(Math.min(50, Math.max(0, data.shearModulus)) / 50) * 219.8} 219.8`}
                       />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -836,7 +850,7 @@ export function SoilAnalysis() {
                     </div>
                   </div>
                 </div>
-                <div className="mt-1 text-xs text-gray-600 text-center">0–200 MPa</div>
+                <div className="mt-1 text-xs text-gray-600 text-center">20–50 MPa</div>
                 {typeof data.gmaxPred === 'number' && (
                   <div className="mt-1 text-[11px] text-gray-600 text-center">
                     80% PI: {safeToFixed(data.gmaxP10, 1)}–{safeToFixed(data.gmaxP90, 1)} MPa
